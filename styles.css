@@ -437,7 +437,8 @@ dialog::backdrop {
   gap: 10px;
 }
 
-.photo-preview {
+.photo-preview,
+.draft-photo-preview {
   display: grid;
   place-items: center;
   min-height: 180px;
@@ -449,14 +450,30 @@ dialog::backdrop {
   font-weight: 750;
 }
 
-.photo-preview img {
+.draft-photo-field {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.draft-photo-preview {
+  min-height: 86px;
+  height: 86px;
+}
+
+.photo-preview img,
+.draft-photo-preview img {
   width: 100%;
   max-height: 260px;
   object-fit: contain;
 }
 
 .photo-preview.is-empty img,
-.photo-preview:not(.is-empty) span {
+.photo-preview:not(.is-empty) span,
+.draft-photo-preview.is-empty img,
+.draft-photo-preview:not(.is-empty) span {
   display: none;
 }
 
@@ -560,6 +577,10 @@ dialog::backdrop {
   }
 
   .category-add-row {
+    grid-template-columns: 1fr;
+  }
+
+  .draft-photo-field {
     grid-template-columns: 1fr;
   }
 }

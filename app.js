@@ -550,6 +550,19 @@ function renderDrafts() {
     const card = document.createElement("div");
     card.className = "draft-card";
     card.innerHTML = `
+      <section class="draft-photo-field" aria-label="草稿图片">
+        <div class="draft-photo-preview is-empty">
+          <span>无图片</span>
+          <img alt="草稿图片预览" />
+        </div>
+        <div class="photo-actions">
+          <label class="file-button compact">
+            拍照/选图
+            <input class="draft-photo-input" type="file" accept="image/*" capture="environment" />
+          </label>
+          <button class="ghost-button compact draft-photo-remove" type="button">移除图片</button>
+        </div>
+      </section>
       <div class="two-col">
         <label>名称<input data-field="name" /></label>
         <label>分类<select data-field="category"></select></label>
@@ -565,6 +578,24 @@ function renderDrafts() {
       <label>备注<textarea data-field="notes" rows="2"></textarea></label>
       <label class="checkbox-row"><input data-field="opened" type="checkbox" /><span>已开封</span></label>
     `;
+    updateDraftPhotoPreview(card, draft.photoData || "");
+    const photoInput = card.querySelector(".draft-photo-input");
+    photoInput.addEventListener("change", async () => {
+      const file = photoInput.files?.[0];
+      if (!file) return;
+      try {
+        draft.photoData = await compressImageFile(file);
+        updateDraftPhotoPreview(card, draft.photoData);
+        showToast("图片已添加");
+      } catch {
+        showToast("图片读取失败");
+      }
+    });
+    card.querySelector(".draft-photo-remove").addEventListener("click", () => {
+      draft.photoData = "";
+      photoInput.value = "";
+      updateDraftPhotoPreview(card, "");
+    });
     card.querySelector("select").append(...state.categories.map((category) => new Option(category, category)));
     for (const input of card.querySelectorAll("[data-field]")) {
       const field = input.dataset.field;
@@ -577,6 +608,13 @@ function renderDrafts() {
     els.draftList.append(card);
     if (index === 0) card.querySelector("input").focus();
   });
+}
+
+function updateDraftPhotoPreview(card, photoData) {
+  const preview = card.querySelector(".draft-photo-preview");
+  const image = preview.querySelector("img");
+  preview.classList.toggle("is-empty", !photoData);
+  image.src = photoData || "";
 }
 
 async function saveDrafts() {
