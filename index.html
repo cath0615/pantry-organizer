@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f7f1e8" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Pantry" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <title>Pantry Organizer</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icon.svg" />
+    <link rel="stylesheet" href="./styles.css?v=8" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Pantry</p>
+          <h1>食材记录</h1>
+        </div>
+        <button class="icon-button" id="backupButton" type="button" aria-label="导入导出">
+          <span aria-hidden="true">⇅</span>
+        </button>
+      </header>
+
+      <main>
+        <section class="capture-panel" aria-labelledby="captureTitle">
+          <div class="capture-heading">
+            <h2 id="captureTitle">添加食材</h2>
+            <button class="voice-button" id="voiceButton" type="button">
+              <span class="voice-dot" aria-hidden="true"></span>
+              <span id="voiceLabel">语音</span>
+            </button>
+          </div>
+          <textarea
+            id="quickInput"
+            rows="4"
+            placeholder="例如：买了生抽明年三月过期，放厨房柜子，备注开封后冷藏"
+          ></textarea>
+          <div class="capture-actions">
+            <button class="primary-button" id="parseButton" type="button">整理</button>
+            <button class="ghost-button" id="clearInputButton" type="button">清空</button>
+          </div>
+        </section>
+
+        <section class="draft-panel is-hidden" id="draftPanel" aria-labelledby="draftTitle">
+          <div class="section-title-row">
+            <h2 id="draftTitle">确认记录</h2>
+            <button class="ghost-button compact" id="discardDraftButton" type="button">取消</button>
+          </div>
+          <div class="draft-list" id="draftList"></div>
+          <button class="primary-button full-width" id="saveDraftButton" type="button">保存</button>
+        </section>
+
+        <section class="toolbar" aria-label="筛选和搜索">
+          <label class="search-field">
+            <span aria-hidden="true">⌕</span>
+            <input id="searchInput" type="search" placeholder="搜索名称、备注、位置" />
+          </label>
+          <div class="segmented" id="statusFilter">
+            <button class="is-active" type="button" data-status="all">全部</button>
+            <button type="button" data-status="soon">快过期</button>
+            <button type="button" data-status="expired">已过期</button>
+          </div>
+          <select id="categoryFilter" aria-label="分类筛选">
+            <option value="all">所有分类</option>
+          </select>
+        </section>
+
+        <section class="summary-grid" aria-label="概览">
+          <div>
+            <span id="totalCount">0</span>
+            <p>全部</p>
+          </div>
+          <div>
+            <span id="soonCount">0</span>
+            <p>30 天内</p>
+          </div>
+          <div>
+            <span id="expiredCount">0</span>
+            <p>已过期</p>
+          </div>
+        </section>
+
+        <section class="items-section" aria-labelledby="itemsTitle">
+          <div class="section-title-row">
+            <h2 id="itemsTitle">库存</h2>
+            <button class="ghost-button compact" id="addBlankButton" type="button">手动添加</button>
+          </div>
+          <div class="item-list" id="itemList"></div>
+          <p class="empty-state" id="emptyState">还没有记录</p>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="itemDialog">
+      <form method="dialog" class="dialog-card" id="itemForm">
+        <div class="section-title-row">
+          <h2 id="dialogTitle">编辑</h2>
+          <button class="icon-button small" id="closeItemDialogButton" type="button" aria-label="关闭">×</button>
+        </div>
+        <input type="hidden" id="itemId" />
+        <label>
+          名称
+          <input id="itemName" required autocomplete="off" />
+        </label>
+        <div class="two-col">
+          <label>
+            分类
+            <select id="itemCategory"></select>
+          </label>
+          <label>
+            过期日期
+            <input id="itemExpireDate" type="date" />
+          </label>
+        </div>
+        <div class="two-col">
+          <label>
+            数量
+            <input id="itemQuantity" type="number" min="0" step="0.1" />
+          </label>
+          <label>
+            单位
+            <input id="itemUnit" autocomplete="off" />
+          </label>
+        </div>
+        <label>
+          位置
+          <input id="itemLocation" autocomplete="off" />
+        </label>
+        <label>
+          备注
+          <textarea id="itemNotes" rows="3"></textarea>
+        </label>
+        <label class="checkbox-row">
+          <input id="itemOpened" type="checkbox" />
+          <span>已开封</span>
+        </label>
+        <div class="dialog-actions">
+          <button class="danger-button" id="deleteItemButton" type="button">删除</button>
+          <button class="primary-button" value="default" type="submit">保存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="backupDialog">
+      <form method="dialog" class="dialog-card">
+        <div class="section-title-row">
+          <h2>导入导出</h2>
+          <button class="icon-button small" value="cancel" type="submit" formnovalidate aria-label="关闭">×</button>
+        </div>
+        <div class="backup-actions">
+          <button class="primary-button" id="exportJsonButton" type="button">生成 JSON</button>
+          <button class="ghost-button" id="exportCsvButton" type="button">生成 CSV</button>
+          <button class="ghost-button" id="copyBackupButton" type="button">复制内容</button>
+          <button class="ghost-button" id="importTextButton" type="button">从文本导入</button>
+          <label class="file-button">
+            从文件导入
+            <input id="importFileInput" type="file" accept="application/json,.json" />
+          </label>
+        </div>
+        <section class="category-manager" aria-labelledby="categoryManagerTitle">
+          <h3 id="categoryManagerTitle">分类管理</h3>
+          <div class="category-add-row">
+            <input id="categoryNameInput" autocomplete="off" placeholder="新分类，例如：早餐" />
+            <button class="ghost-button" id="addCategoryButton" type="button">添加</button>
+          </div>
+          <div class="category-list" id="categoryList"></div>
+        </section>
+        <label class="backup-output-label">
+          备份 / 导入内容
+          <textarea id="backupOutput" rows="6" placeholder="点“生成 JSON”后复制这里的内容；导入时也可以把 JSON 粘贴到这里"></textarea>
+        </label>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="./app.js?v=8" type="module"></script>
+  </body>
+</html>
