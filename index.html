@@ -172,6 +172,9 @@
           <button class="primary-button" id="exportJsonButton" type="button">生成 JSON</button>
           <button class="ghost-button" id="exportCsvButton" type="button">生成 CSV</button>
           <button class="ghost-button" id="copyBackupButton" type="button">复制内容</button>
+          <button class="ghost-button" id="copyChunkButton" type="button">复制当前段</button>
+          <button class="ghost-button" id="prevChunkButton" type="button">上一段</button>
+          <button class="ghost-button" id="nextChunkButton" type="button">下一段</button>
           <button class="ghost-button" id="downloadBackupButton" type="button">下载备份</button>
           <button class="ghost-button" id="importTextButton" type="button">从文本导入</button>
           <label class="file-button">
@@ -180,6 +183,7 @@
           </label>
         </div>
         <p class="backup-status" id="backupStatus">JSON 备份会包含图片；CSV 不包含图片。</p>
+        <p class="backup-status" id="chunkStatus">照片多时可以逐段复制；导入时把所有分段文本粘到下面。</p>
         <section class="category-manager" aria-labelledby="categoryManagerTitle">
           <h3 id="categoryManagerTitle">分类管理</h3>
           <div class="category-add-row">
@@ -196,6 +200,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=13" type="module"></script>
+    <script src="./app.js?v=14" type="module"></script>
   </body>
 </html>

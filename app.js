@@ -4,6 +4,8 @@ const STORE_NAME = "items";
 const DEFAULT_CATEGORIES = ["调料", "干货", "冷藏", "冷冻", "罐头", "烘焙", "饮品", "其他"];
 const STORAGE_KEY = "pantry-organizer-fallback";
 const CATEGORIES_KEY = "pantry-organizer-categories";
+const BACKUP_CHUNK_SIZE = 180000;
+const CHUNK_PREFIX = "PANTRY_BACKUP_PART";
 
 const state = {
   items: [],
@@ -16,7 +18,10 @@ const state = {
   fallback: false,
   recognition: null,
   listening: false,
-  pendingPhotoTasks: new Set()
+  pendingPhotoTasks: new Set(),
+  backupChunks: [],
+  activeChunkIndex: 0,
+  fullBackupText: ""
 };
 
 const $ = (id) => document.getElementById(id);
@@ -68,10 +73,14 @@ const els = {
   exportJsonButton: $("exportJsonButton"),
   exportCsvButton: $("exportCsvButton"),
   copyBackupButton: $("copyBackupButton"),
+  copyChunkButton: $("copyChunkButton"),
+  prevChunkButton: $("prevChunkButton"),
+  nextChunkButton: $("nextChunkButton"),
   downloadBackupButton: $("downloadBackupButton"),
   importTextButton: $("importTextButton"),
   backupOutput: $("backupOutput"),
   backupStatus: $("backupStatus"),
+  chunkStatus: $("chunkStatus"),
   categoryNameInput: $("categoryNameInput"),
   addCategoryButton: $("addCategoryButton"),
   categoryList: $("categoryList"),
@@ -129,6 +138,9 @@ function bindEvents() {
   on(els.exportJsonButton, "click", exportJson);
   on(els.exportCsvButton, "click", exportCsv);
   on(els.copyBackupButton, "click", copyBackupText);
+  on(els.copyChunkButton, "click", copyCurrentChunk);
+  on(els.prevChunkButton, "click", () => showBackupChunk(state.activeChunkIndex - 1));
+  on(els.nextChunkButton, "click", () => showBackupChunk(state.activeChunkIndex + 1));
   on(els.downloadBackupButton, "click", downloadBackupText);
   on(els.importTextButton, "click", importJsonFromTextArea);
   on(els.importFileInput, "change", importJson);
@@ -824,17 +836,23 @@ function exportJson() {
     items: state.items
   };
   const content = JSON.stringify(payload);
-  els.backupOutput.value = content;
+  state.fullBackupText = content;
+  state.backupChunks = makeBackupChunks(content);
+  showBackupChunk(0);
   updateBackupStatus(content, true);
-  showToast("完整 JSON 已生成");
+  showToast(state.backupChunks.length > 1 ? "分段 JSON 已生成" : "JSON 已生成");
 }
 
 function exportCsv() {
   const header = ["name", "category", "expireDate", "quantity", "unit", "location", "opened", "notes"];
   const rows = state.items.map((item) => header.map((key) => csvCell(item[key])).join(","));
   const content = [header.join(","), ...rows].join("\n");
+  state.fullBackupText = content;
+  state.backupChunks = [];
+  state.activeChunkIndex = 0;
   els.backupOutput.value = content;
   updateBackupStatus(content, false);
+  updateChunkStatus("CSV 不包含图片，不需要分段。");
   showToast("CSV 已生成，可以复制");
 }
 
@@ -845,6 +863,33 @@ function updateBackupStatus(content, includesPhotos) {
   if (els.backupStatus) {
     els.backupStatus.textContent = `${state.items.length} 个物品，${photoText}，备份大小 ${size}`;
   }
+}
+
+function makeBackupChunks(content) {
+  if (content.length <= BACKUP_CHUNK_SIZE) return [content];
+  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const total = Math.ceil(content.length / BACKUP_CHUNK_SIZE);
+  const chunks = [];
+  for (let index = 0; index < total; index += 1) {
+    const part = content.slice(index * BACKUP_CHUNK_SIZE, (index + 1) * BACKUP_CHUNK_SIZE);
+    chunks.push(`${CHUNK_PREFIX} ${id} ${index + 1}/${total}\n${part}`);
+  }
+  return chunks;
+}
+
+function showBackupChunk(index) {
+  if (!state.backupChunks.length) return;
+  state.activeChunkIndex = Math.max(0, Math.min(index, state.backupChunks.length - 1));
+  els.backupOutput.value = state.backupChunks[state.activeChunkIndex];
+  if (state.backupChunks.length === 1) {
+    updateChunkStatus("备份较小，可以直接复制或下载。");
+    return;
+  }
+  updateChunkStatus(`正在显示第 ${state.activeChunkIndex + 1}/${state.backupChunks.length} 段。请逐段复制保存。`);
+}
+
+function updateChunkStatus(message) {
+  if (els.chunkStatus) els.chunkStatus.textContent = message;
 }
 
 async function importJson(event) {
@@ -869,7 +914,7 @@ async function importJsonFromTextArea() {
 }
 
 async function importBackupText(text) {
-  const payload = JSON.parse(text.trim());
+  const payload = JSON.parse(restoreChunkedBackup(text).trim());
   const incoming = Array.isArray(payload) ? payload : payload.items;
   if (!Array.isArray(incoming)) throw new Error("Invalid backup");
   if (Array.isArray(payload.categories)) {
@@ -890,7 +935,7 @@ async function importBackupText(text) {
 }
 
 async function copyBackupText() {
-  const text = els.backupOutput.value.trim();
+  const text = state.backupChunks.length > 1 ? els.backupOutput.value.trim() : (state.fullBackupText || els.backupOutput.value).trim();
   if (!text) {
     showToast("先生成 JSON");
     return;
@@ -905,8 +950,24 @@ async function copyBackupText() {
   }
 }
 
-function downloadBackupText() {
+async function copyCurrentChunk() {
   const text = els.backupOutput.value.trim();
+  if (!text) {
+    showToast("先生成 JSON");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast(state.backupChunks.length > 1 ? `已复制第 ${state.activeChunkIndex + 1} 段` : "已复制");
+  } catch {
+    els.backupOutput.focus();
+    els.backupOutput.select();
+    showToast("已选中当前段");
+  }
+}
+
+function downloadBackupText() {
+  const text = (state.fullBackupText || els.backupOutput.value).trim();
   if (!text) {
     showToast("先生成 JSON");
     return;
@@ -926,6 +987,22 @@ function downloadTextFile(filename, content) {
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function restoreChunkedBackup(text) {
+  const trimmed = text.trim();
+  if (!trimmed.includes(CHUNK_PREFIX)) return trimmed;
+  const matches = [...trimmed.matchAll(/PANTRY_BACKUP_PART\s+(\S+)\s+(\d+)\/(\d+)\n([\s\S]*?)(?=\nPANTRY_BACKUP_PART\s+\S+\s+\d+\/\d+\n|$)/g)];
+  if (!matches.length) return trimmed;
+  const id = matches[0][1];
+  const total = Number(matches[0][3]);
+  const parts = new Array(total);
+  for (const match of matches) {
+    if (match[1] !== id) throw new Error("Mixed backup chunks");
+    parts[Number(match[2]) - 1] = match[4];
+  }
+  if (parts.some((part) => part == null)) throw new Error("Missing backup chunk");
+  return parts.join("");
 }
 
 function formatBytes(bytes) {
