@@ -488,6 +488,12 @@ dialog::backdrop {
   gap: 10px;
 }
 
+.backup-status {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
 .backup-output-label textarea {
   min-height: 136px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

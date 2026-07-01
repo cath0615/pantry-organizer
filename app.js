@@ -15,7 +15,8 @@ const state = {
   db: null,
   fallback: false,
   recognition: null,
-  listening: false
+  listening: false,
+  pendingPhotoTasks: new Set()
 };
 
 const $ = (id) => document.getElementById(id);
@@ -67,8 +68,10 @@ const els = {
   exportJsonButton: $("exportJsonButton"),
   exportCsvButton: $("exportCsvButton"),
   copyBackupButton: $("copyBackupButton"),
+  downloadBackupButton: $("downloadBackupButton"),
   importTextButton: $("importTextButton"),
   backupOutput: $("backupOutput"),
+  backupStatus: $("backupStatus"),
   categoryNameInput: $("categoryNameInput"),
   addCategoryButton: $("addCategoryButton"),
   categoryList: $("categoryList"),
@@ -126,6 +129,7 @@ function bindEvents() {
   on(els.exportJsonButton, "click", exportJson);
   on(els.exportCsvButton, "click", exportCsv);
   on(els.copyBackupButton, "click", copyBackupText);
+  on(els.downloadBackupButton, "click", downloadBackupText);
   on(els.importTextButton, "click", importJsonFromTextArea);
   on(els.importFileInput, "change", importJson);
   on(els.voiceButton, "click", toggleSpeech);
@@ -583,12 +587,17 @@ function renderDrafts() {
     photoInput.addEventListener("change", async () => {
       const file = photoInput.files?.[0];
       if (!file) return;
+      draft.photoPending = true;
+      const task = trackPhotoTask(compressImageFile(file));
+      draft.photoTask = task;
       try {
-        draft.photoData = await compressImageFile(file);
+        draft.photoData = await task;
         updateDraftPhotoPreview(card, draft.photoData);
         showToast("图片已添加");
       } catch {
         showToast("图片读取失败");
+      } finally {
+        draft.photoPending = false;
       }
     });
     card.querySelector(".draft-photo-remove").addEventListener("click", () => {
@@ -618,6 +627,7 @@ function updateDraftPhotoPreview(card, photoData) {
 }
 
 async function saveDrafts() {
+  await waitForPendingPhotos();
   const valid = state.drafts.filter((draft) => draft.name.trim());
   for (const draft of valid) {
     await saveItem(normalizeItem(draft));
@@ -655,6 +665,7 @@ function openItemDialog(item = null) {
 
 async function handleItemSubmit(event) {
   event.preventDefault();
+  await waitForPendingPhotos();
   const item = normalizeItem({
     id: els.itemId.value || createId(),
     name: els.itemName.value,
@@ -747,8 +758,9 @@ function formatQuantity(item) {
 async function handlePhotoInput(event) {
   const file = event.target.files?.[0];
   if (!file) return;
+  const task = trackPhotoTask(compressImageFile(file));
   try {
-    const photoData = await compressImageFile(file);
+    const photoData = await task;
     setPhotoPreview(photoData);
     showToast("图片已添加");
   } catch {
@@ -792,6 +804,18 @@ function compressImageFile(file) {
   });
 }
 
+function trackPhotoTask(task) {
+  state.pendingPhotoTasks.add(task);
+  task.finally(() => state.pendingPhotoTasks.delete(task));
+  return task;
+}
+
+async function waitForPendingPhotos() {
+  if (!state.pendingPhotoTasks.size) return;
+  showToast("正在处理图片");
+  await Promise.allSettled([...state.pendingPhotoTasks]);
+}
+
 function exportJson() {
   const payload = {
     version: 1,
@@ -799,9 +823,10 @@ function exportJson() {
     categories: state.categories,
     items: state.items
   };
-  const content = JSON.stringify(payload, null, 2);
+  const content = JSON.stringify(payload);
   els.backupOutput.value = content;
-  showToast("JSON 已生成，可以复制");
+  updateBackupStatus(content, true);
+  showToast("完整 JSON 已生成");
 }
 
 function exportCsv() {
@@ -809,7 +834,17 @@ function exportCsv() {
   const rows = state.items.map((item) => header.map((key) => csvCell(item[key])).join(","));
   const content = [header.join(","), ...rows].join("\n");
   els.backupOutput.value = content;
+  updateBackupStatus(content, false);
   showToast("CSV 已生成，可以复制");
+}
+
+function updateBackupStatus(content, includesPhotos) {
+  const photoCount = state.items.filter((item) => item.photoData).length;
+  const size = formatBytes(new Blob([content]).size);
+  const photoText = includesPhotos ? `包含 ${photoCount} 张图片` : "CSV 不包含图片";
+  if (els.backupStatus) {
+    els.backupStatus.textContent = `${state.items.length} 个物品，${photoText}，备份大小 ${size}`;
+  }
 }
 
 async function importJson(event) {
@@ -868,6 +903,39 @@ async function copyBackupText() {
     els.backupOutput.select();
     showToast("已选中文本");
   }
+}
+
+function downloadBackupText() {
+  const text = els.backupOutput.value.trim();
+  if (!text) {
+    showToast("先生成 JSON");
+    return;
+  }
+  const isJson = text.startsWith("{") || text.startsWith("[");
+  const filename = isJson ? `pantry-backup-${todaySlug()}.txt` : `pantry-backup-${todaySlug()}.csv`;
+  downloadTextFile(filename, text);
+}
+
+function downloadTextFile(filename, content) {
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function todaySlug() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function csvCell(value) {

@@ -10,7 +10,7 @@
     <title>Pantry Organizer</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=12" />
+    <link rel="stylesheet" href="./styles.css?v=13" />
   </head>
   <body>
     <div class="app-shell">
@@ -172,12 +172,14 @@
           <button class="primary-button" id="exportJsonButton" type="button">生成 JSON</button>
           <button class="ghost-button" id="exportCsvButton" type="button">生成 CSV</button>
           <button class="ghost-button" id="copyBackupButton" type="button">复制内容</button>
+          <button class="ghost-button" id="downloadBackupButton" type="button">下载备份</button>
           <button class="ghost-button" id="importTextButton" type="button">从文本导入</button>
           <label class="file-button">
             从文件导入
-            <input id="importFileInput" type="file" accept="application/json,.json" />
+            <input id="importFileInput" type="file" accept="application/json,text/plain,.json,.txt" />
           </label>
         </div>
+        <p class="backup-status" id="backupStatus">JSON 备份会包含图片；CSV 不包含图片。</p>
         <section class="category-manager" aria-labelledby="categoryManagerTitle">
           <h3 id="categoryManagerTitle">分类管理</h3>
           <div class="category-add-row">
@@ -194,6 +196,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=12" type="module"></script>
+    <script src="./app.js?v=13" type="module"></script>
   </body>
 </html>
