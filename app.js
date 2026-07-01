@@ -19,6 +19,9 @@ const state = {
 };
 
 const $ = (id) => document.getElementById(id);
+const on = (element, eventName, handler) => {
+  if (element) element.addEventListener(eventName, handler);
+};
 
 const els = {
   quickInput: $("quickInput"),
@@ -88,50 +91,50 @@ async function init() {
 }
 
 function bindEvents() {
-  els.parseButton.addEventListener("click", handleParse);
-  els.clearInputButton.addEventListener("click", () => {
+  on(els.parseButton, "click", handleParse);
+  on(els.clearInputButton, "click", () => {
     els.quickInput.value = "";
     els.quickInput.focus();
   });
-  els.saveDraftButton.addEventListener("click", saveDrafts);
-  els.discardDraftButton.addEventListener("click", clearDrafts);
-  els.searchInput.addEventListener("input", () => {
+  on(els.saveDraftButton, "click", saveDrafts);
+  on(els.discardDraftButton, "click", clearDrafts);
+  on(els.searchInput, "input", () => {
     state.query = els.searchInput.value.trim().toLowerCase();
     render();
   });
-  els.statusFilter.addEventListener("click", (event) => {
+  on(els.statusFilter, "click", (event) => {
     const button = event.target.closest("button[data-status]");
     if (!button) return;
     state.status = button.dataset.status;
     render();
   });
-  els.categoryFilter.addEventListener("change", () => {
+  on(els.categoryFilter, "change", () => {
     state.category = els.categoryFilter.value;
     render();
   });
-  els.addBlankButton.addEventListener("click", () => openItemDialog());
-  els.itemForm.addEventListener("submit", handleItemSubmit);
-  els.deleteItemButton.addEventListener("click", deleteCurrentItem);
-  els.closeItemDialogButton.addEventListener("click", () => els.itemDialog.close());
-  els.itemPhotoInput.addEventListener("change", handlePhotoInput);
-  els.removePhotoButton.addEventListener("click", removeCurrentPhoto);
-  els.backupButton.addEventListener("click", () => {
+  on(els.addBlankButton, "click", () => openItemDialog());
+  on(els.itemForm, "submit", handleItemSubmit);
+  on(els.deleteItemButton, "click", deleteCurrentItem);
+  on(els.closeItemDialogButton, "click", () => els.itemDialog.close());
+  on(els.itemPhotoInput, "change", handlePhotoInput);
+  on(els.removePhotoButton, "click", removeCurrentPhoto);
+  on(els.backupButton, "click", () => {
     renderCategoryList();
     els.backupDialog.showModal();
   });
-  els.exportJsonButton.addEventListener("click", exportJson);
-  els.exportCsvButton.addEventListener("click", exportCsv);
-  els.copyBackupButton.addEventListener("click", copyBackupText);
-  els.importTextButton.addEventListener("click", importJsonFromTextArea);
-  els.importFileInput.addEventListener("change", importJson);
-  els.voiceButton.addEventListener("click", toggleSpeech);
-  els.addCategoryButton.addEventListener("click", addCategoryFromInput);
-  els.categoryNameInput.addEventListener("keydown", (event) => {
+  on(els.exportJsonButton, "click", exportJson);
+  on(els.exportCsvButton, "click", exportCsv);
+  on(els.copyBackupButton, "click", copyBackupText);
+  on(els.importTextButton, "click", importJsonFromTextArea);
+  on(els.importFileInput, "change", importJson);
+  on(els.voiceButton, "click", toggleSpeech);
+  on(els.addCategoryButton, "click", addCategoryFromInput);
+  on(els.categoryNameInput, "keydown", (event) => {
     if (event.key !== "Enter") return;
     event.preventDefault();
     addCategoryFromInput();
   });
-  els.categoryList.addEventListener("click", deleteCategoryFromList);
+  on(els.categoryList, "click", deleteCategoryFromList);
 }
 
 async function initStorage() {
@@ -588,7 +591,7 @@ function openItemDialog(item = null) {
   els.dialogTitle.textContent = isEditing ? "编辑" : "手动添加";
   els.itemId.value = item?.id || "";
   setPhotoPreview(item?.photoData || "");
-  els.itemPhotoInput.value = "";
+  if (els.itemPhotoInput) els.itemPhotoInput.value = "";
   els.itemName.value = item?.name || "";
   els.itemCategory.value = item?.category || "其他";
   els.itemExpireDate.value = item?.expireDate || "";
@@ -613,7 +616,7 @@ async function handleItemSubmit(event) {
     location: els.itemLocation.value,
     notes: els.itemNotes.value,
     opened: els.itemOpened.checked,
-    photoData: els.itemPhotoData.value,
+    photoData: els.itemPhotoData?.value || "",
     createdAt: state.items.find((existing) => existing.id === els.itemId.value)?.createdAt
   });
   await saveItem(item);
@@ -710,9 +713,9 @@ function removeCurrentPhoto() {
 }
 
 function setPhotoPreview(photoData) {
-  els.itemPhotoData.value = photoData || "";
-  els.photoPreview.classList.toggle("is-empty", !photoData);
-  els.photoPreviewImage.src = photoData || "";
+  if (els.itemPhotoData) els.itemPhotoData.value = photoData || "";
+  if (els.photoPreview) els.photoPreview.classList.toggle("is-empty", !photoData);
+  if (els.photoPreviewImage) els.photoPreviewImage.src = photoData || "";
 }
 
 function compressImageFile(file) {
