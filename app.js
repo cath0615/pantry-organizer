@@ -43,6 +43,11 @@ const els = {
   itemForm: $("itemForm"),
   dialogTitle: $("dialogTitle"),
   itemId: $("itemId"),
+  itemPhotoData: $("itemPhotoData"),
+  itemPhotoInput: $("itemPhotoInput"),
+  photoPreview: $("photoPreview"),
+  photoPreviewImage: $("photoPreviewImage"),
+  removePhotoButton: $("removePhotoButton"),
   itemName: $("itemName"),
   itemCategory: $("itemCategory"),
   itemExpireDate: $("itemExpireDate"),
@@ -108,6 +113,8 @@ function bindEvents() {
   els.itemForm.addEventListener("submit", handleItemSubmit);
   els.deleteItemButton.addEventListener("click", deleteCurrentItem);
   els.closeItemDialogButton.addEventListener("click", () => els.itemDialog.close());
+  els.itemPhotoInput.addEventListener("change", handlePhotoInput);
+  els.removePhotoButton.addEventListener("click", removeCurrentPhoto);
   els.backupButton.addEventListener("click", () => {
     renderCategoryList();
     els.backupDialog.showModal();
@@ -488,16 +495,29 @@ function renderItemCard(item) {
   button.type = "button";
   button.addEventListener("click", () => openItemDialog(item));
   button.innerHTML = `
-    <div class="item-topline">
-      <span class="item-name"></span>
-      <span class="date-pill ${status}"></span>
+    <div class="item-thumb item-thumb-placeholder"></div>
+    <div class="item-card-content">
+      <div class="item-topline">
+        <span class="item-name"></span>
+        <span class="date-pill ${status}"></span>
+      </div>
+      <div class="meta-row">
+        <span class="pill"></span>
+        <span class="item-meta"></span>
+      </div>
+      <p class="item-notes"></p>
     </div>
-    <div class="meta-row">
-      <span class="pill"></span>
-      <span class="item-meta"></span>
-    </div>
-    <p class="item-notes"></p>
   `;
+  const thumb = button.querySelector(".item-thumb");
+  if (item.photoData) {
+    const image = document.createElement("img");
+    image.className = "item-thumb";
+    image.alt = "";
+    image.src = item.photoData;
+    thumb.replaceWith(image);
+  } else {
+    thumb.textContent = item.name.slice(0, 1) || "食";
+  }
   button.querySelector(".item-name").textContent = item.name;
   button.querySelector(".date-pill").textContent = formatExpiry(item.expireDate);
   button.querySelector(".pill").textContent = item.category || "其他";
@@ -567,6 +587,8 @@ function openItemDialog(item = null) {
   const isEditing = Boolean(item);
   els.dialogTitle.textContent = isEditing ? "编辑" : "手动添加";
   els.itemId.value = item?.id || "";
+  setPhotoPreview(item?.photoData || "");
+  els.itemPhotoInput.value = "";
   els.itemName.value = item?.name || "";
   els.itemCategory.value = item?.category || "其他";
   els.itemExpireDate.value = item?.expireDate || "";
@@ -591,6 +613,7 @@ async function handleItemSubmit(event) {
     location: els.itemLocation.value,
     notes: els.itemNotes.value,
     opened: els.itemOpened.checked,
+    photoData: els.itemPhotoData.value,
     createdAt: state.items.find((existing) => existing.id === els.itemId.value)?.createdAt
   });
   await saveItem(item);
@@ -623,6 +646,7 @@ function normalizeItem(item) {
     location: String(item.location || "").trim(),
     opened: Boolean(item.opened),
     notes: String(item.notes || "").trim(),
+    photoData: item.photoData || "",
     rawText: item.rawText || "",
     createdAt: item.createdAt || null,
     updatedAt: item.updatedAt || null
@@ -666,6 +690,54 @@ function formatExpiry(date) {
 function formatQuantity(item) {
   if (item.quantity === "" || item.quantity == null) return "";
   return `${item.quantity}${item.unit || ""}`;
+}
+
+async function handlePhotoInput(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try {
+    const photoData = await compressImageFile(file);
+    setPhotoPreview(photoData);
+    showToast("图片已添加");
+  } catch {
+    showToast("图片读取失败");
+  }
+}
+
+function removeCurrentPhoto() {
+  setPhotoPreview("");
+  els.itemPhotoInput.value = "";
+}
+
+function setPhotoPreview(photoData) {
+  els.itemPhotoData.value = photoData || "";
+  els.photoPreview.classList.toggle("is-empty", !photoData);
+  els.photoPreviewImage.src = photoData || "";
+}
+
+function compressImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error("Invalid image"));
+      image.onload = () => {
+        const maxSize = 900;
+        const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.78));
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function exportJson() {
