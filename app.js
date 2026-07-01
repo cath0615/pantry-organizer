@@ -38,6 +38,7 @@ const els = {
   searchInput: $("searchInput"),
   statusFilter: $("statusFilter"),
   categoryFilter: $("categoryFilter"),
+  manageCategoriesButton: $("manageCategoriesButton"),
   totalCount: $("totalCount"),
   soonCount: $("soonCount"),
   expiredCount: $("expiredCount"),
@@ -112,6 +113,7 @@ function bindEvents() {
     state.category = els.categoryFilter.value;
     render();
   });
+  on(els.manageCategoriesButton, "click", () => openCategoryManager());
   on(els.addBlankButton, "click", () => openItemDialog());
   on(els.itemForm, "submit", handleItemSubmit);
   on(els.deleteItemButton, "click", deleteCurrentItem);
@@ -119,8 +121,7 @@ function bindEvents() {
   on(els.itemPhotoInput, "change", handlePhotoInput);
   on(els.removePhotoButton, "click", removeCurrentPhoto);
   on(els.backupButton, "click", () => {
-    renderCategoryList();
-    els.backupDialog.showModal();
+    openBackupDialog();
   });
   on(els.exportJsonButton, "click", exportJson);
   on(els.exportCsvButton, "click", exportCsv);
@@ -135,6 +136,16 @@ function bindEvents() {
     addCategoryFromInput();
   });
   on(els.categoryList, "click", deleteCategoryFromList);
+}
+
+function openBackupDialog() {
+  renderCategoryList();
+  els.backupDialog.showModal();
+}
+
+function openCategoryManager() {
+  openBackupDialog();
+  window.setTimeout(() => els.categoryNameInput?.focus(), 80);
 }
 
 async function initStorage() {

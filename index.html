@@ -10,7 +10,7 @@
     <title>Pantry Organizer</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=10" />
+    <link rel="stylesheet" href="./styles.css?v=11" />
   </head>
   <body>
     <div class="app-shell">
@@ -66,6 +66,7 @@
           <select id="categoryFilter" aria-label="分类筛选">
             <option value="all">所有分类</option>
           </select>
+          <button class="ghost-button full-width" id="manageCategoriesButton" type="button">管理分类</button>
         </section>
 
         <section class="summary-grid" aria-label="概览">
@@ -86,7 +87,7 @@
         <section class="items-section" aria-labelledby="itemsTitle">
           <div class="section-title-row">
             <h2 id="itemsTitle">库存</h2>
-            <button class="ghost-button compact" id="addBlankButton" type="button">手动添加</button>
+            <button class="ghost-button compact" id="addBlankButton" type="button">添加/拍照</button>
           </div>
           <div class="item-list" id="itemList"></div>
           <p class="empty-state" id="emptyState">还没有记录</p>
@@ -107,15 +108,18 @@
           <input id="itemName" required autocomplete="off" />
         </label>
         <section class="photo-field" aria-label="物品图片">
+          <div class="section-title-row">
+            <h3>图片</h3>
+            <label class="file-button compact">
+              拍照/选图
+              <input id="itemPhotoInput" type="file" accept="image/*" capture="environment" />
+            </label>
+          </div>
           <div class="photo-preview is-empty" id="photoPreview">
             <span>无图片</span>
             <img id="photoPreviewImage" alt="物品图片预览" />
           </div>
           <div class="photo-actions">
-            <label class="file-button">
-              拍照/选图
-              <input id="itemPhotoInput" type="file" accept="image/*" capture="environment" />
-            </label>
             <button class="ghost-button" id="removePhotoButton" type="button">移除图片</button>
           </div>
         </section>
@@ -190,6 +194,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=10" type="module"></script>
+    <script src="./app.js?v=11" type="module"></script>
   </body>
 </html>
