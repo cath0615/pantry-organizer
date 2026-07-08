@@ -403,7 +403,18 @@ function extractNotes(text) {
 
 function extractCategory(text) {
   const match = text.match(/(?:分类|种类|类别)(?:是|为|:|：)?\s*([^，,。；;]+)/);
-  return match ? normalizeCategoryName(match[1]) : "";
+  return match ? cleanCategory(match[1]) : "";
+}
+
+function cleanCategory(value) {
+  return normalizeCategoryName(
+    String(value || "")
+      .replace(/(放在|放到|放|位置是|位置|在).*/, "")
+      .replace(new RegExp(`${QUANTITY_PHRASE}.*`, "i"), "")
+      .replace(/\d{4}\s*[-/.年]\s*\d{1,2}(?:\s*[-/.月]\s*\d{1,2})?.*/, "")
+      .replace(/(明年|今年|后年|下个月|这个月|\d{1,2}\s*月).*/, "")
+      .replace(/(过期|到期|保质期|备注).*/, "")
+  );
 }
 
 function extractQuantity(text) {
