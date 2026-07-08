@@ -8,6 +8,7 @@ const STORAGE_KEY = "pantry-organizer-fallback";
 const CATEGORIES_KEY = "pantry-organizer-categories";
 const BACKUP_CHUNK_SIZE = 180000;
 const CHUNK_PREFIX = "PANTRY_BACKUP_PART";
+const QUANTITY_PHRASE = `(?:数量|数目|有)?\\s*[一二两三四五六七八九十百\\d]+(?:\\.\\d+)?\\s*(?:${QUANTITY_UNITS})`;
 
 const state = {
   items: [],
@@ -335,7 +336,7 @@ function extractName(text) {
     .replace(/\d{4}\s*[年/.-]\s*\d{1,2}.*/, "")
     .replace(/\d{1,2}\s*月.*/, "")
     .replace(/(过期|到期|保质期|用完|放在|放|备注|数量|开封).*/, "")
-    .replace(new RegExp(`[一二两三四五六七八九十百\\d]+(\\.\\d+)?\\s*(${QUANTITY_UNITS})`, "i"), "")
+    .replace(new RegExp(QUANTITY_PHRASE, "ig"), "")
     .replace(/(?:分类|种类|类别)(?:是|为|:|：)?\s*[^，,。；;]+/, "")
     .trim();
   value = value.replace(/^[，,、\s]+|[，,、\s]+$/g, "");
@@ -377,13 +378,15 @@ function extractDate(text) {
 }
 
 function extractLocation(text) {
-  const match = text.match(/(?:放在|放到|放|位置是|在)([^，,。；;]+?)(?:$|，|,|。|；|;|备注|过期|到期|保质期|\d{4}\s*[-/.年]|\d{1,2}\s*月|明年|今年|后年)/);
+  const match = text.match(new RegExp(`(?:放在|放到|放|位置是|在)([^，,。；;]+?)(?:$|，|,|。|；|;|备注|过期|到期|保质期|${QUANTITY_PHRASE}|\\d{4}\\s*[-/.年]|\\d{1,2}\\s*月|明年|今年|后年)`));
   return match ? cleanLocation(match[1]) : "";
 }
 
 function cleanLocation(value) {
   return normalizeLocationName(
     value
+      .replace(/^(放在|放到|放|位置是|在)/, "")
+      .replace(new RegExp(`${QUANTITY_PHRASE}.*`, "i"), "")
       .replace(/\d{4}\s*[-/.年]\s*\d{1,2}(?:\s*[-/.月]\s*\d{1,2})?.*/, "")
       .replace(/(明年|今年|后年|下个月|这个月|\d{1,2}\s*月).*/, "")
       .replace(/(过期|到期|保质期).*/, "")
