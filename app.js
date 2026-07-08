@@ -284,15 +284,17 @@ function parsePantryText(text) {
     const opened = /开封|打开|已开/.test(chunk);
     const quantityInfo = extractQuantity(chunk);
     const cleanName = extractName(chunk);
+    const location = extractLocation(chunk) || sharedLocation || "";
+    const category = categoryForLocation(location) || extractCategory(chunk) || extractCategory(normalized) || guessCategory(chunk);
     return {
       id: createId(),
       name: cleanName || chunk.slice(0, 18) || "未命名",
-      category: extractCategory(chunk) || extractCategory(normalized) || guessCategory(chunk),
+      category,
       expireDate: dateInfo?.date || "",
       expireDatePrecision: dateInfo?.precision || "unknown",
       quantity: quantityInfo?.quantity || "",
       unit: quantityInfo?.unit || "",
-      location: extractLocation(chunk) || sharedLocation || "",
+      location,
       opened,
       notes: extractNotes(chunk) || sharedNotes || "",
       rawText: chunk
@@ -328,7 +330,7 @@ function extractName(text) {
   let value = text
     .replace(/^(我)?(今天|刚刚)?(买了|买|有|新增|添加)/, "")
     .replace(/(明年|今年|后年|下个月|这个月|月底|年底|春节前|过年前).*/, "")
-    .replace(/\d{4}\s*[年/-]\s*\d{1,2}.*/, "")
+    .replace(/\d{4}\s*[年/.-]\s*\d{1,2}.*/, "")
     .replace(/\d{1,2}\s*月.*/, "")
     .replace(/(过期|到期|保质期|用完|放在|放|备注|数量|开封).*/, "")
     .replace(/[一二两三四五六七八九十百\d]+(\.\d+)?\s*(瓶|包|袋|罐|盒|个|斤|克|g|kg|ml|l|升|毫升)/i, "")
@@ -373,8 +375,17 @@ function extractDate(text) {
 }
 
 function extractLocation(text) {
-  const match = text.match(/(?:放在|放到|放|位置是|在)([^，,。；;]+?)(?:$|，|,|。|；|;|备注|过期)/);
-  return match ? match[1].trim() : "";
+  const match = text.match(/(?:放在|放到|放|位置是|在)([^，,。；;]+?)(?:$|，|,|。|；|;|备注|过期|到期|保质期|\d{4}\s*[-/.年]|\d{1,2}\s*月|明年|今年|后年)/);
+  return match ? cleanLocation(match[1]) : "";
+}
+
+function cleanLocation(value) {
+  return normalizeLocationName(
+    value
+      .replace(/\d{4}\s*[-/.年]\s*\d{1,2}(?:\s*[-/.月]\s*\d{1,2})?.*/, "")
+      .replace(/(明年|今年|后年|下个月|这个月|\d{1,2}\s*月).*/, "")
+      .replace(/(过期|到期|保质期).*/, "")
+  );
 }
 
 function extractNotes(text) {
@@ -403,6 +414,11 @@ function guessCategory(text) {
   if (/面粉|酵母|泡打粉|黄油|烘焙/.test(text)) return "烘焙";
   if (/茶|咖啡|饮料|果汁|酒/.test(text)) return "饮品";
   return "其他";
+}
+
+function categoryForLocation(location) {
+  if (normalizeLocationName(location) === "零食柜") return "零食";
+  return "";
 }
 
 function loadCategories() {
@@ -768,7 +784,8 @@ async function deleteCurrentItem() {
 }
 
 function normalizeItem(item) {
-  const category = ensureCategory(item.category);
+  const location = normalizeLocationName(item.location);
+  const category = ensureCategory(categoryForLocation(location) || item.category);
   return {
     id: item.id || createId(),
     name: String(item.name || "").trim(),
@@ -777,7 +794,7 @@ function normalizeItem(item) {
     expireDatePrecision: item.expireDatePrecision || (item.expireDate ? "day" : "unknown"),
     quantity: item.quantity === "" || item.quantity == null ? "" : Number(item.quantity),
     unit: String(item.unit || "").trim(),
-    location: normalizeLocationName(item.location),
+    location,
     opened: Boolean(item.opened),
     notes: String(item.notes || "").trim(),
     photoData: item.photoData || "",
