@@ -383,8 +383,11 @@ function extractLocation(text) {
 }
 
 function cleanLocation(value) {
+  const trimmed = String(value || "").trim();
+  const cabinetMatch = trimmed.match(/(.+?柜|冰箱)/);
+  if (cabinetMatch) return normalizeLocationName(cabinetMatch[1]);
   return normalizeLocationName(
-    value
+    trimmed
       .replace(/^(放在|放到|放|位置是|在)/, "")
       .replace(new RegExp(`${QUANTITY_PHRASE}.*`, "i"), "")
       .replace(/\d{4}\s*[-/.年]\s*\d{1,2}(?:\s*[-/.月]\s*\d{1,2})?.*/, "")
