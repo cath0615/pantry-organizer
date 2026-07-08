@@ -10,7 +10,7 @@
     <title>Pantry Organizer</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=13" />
+    <link rel="stylesheet" href="./styles.css?v=15" />
   </head>
   <body>
     <div class="app-shell">
@@ -65,6 +65,12 @@
           </div>
           <select id="categoryFilter" aria-label="分类筛选">
             <option value="all">所有分类</option>
+          </select>
+          <select id="sortSelect" aria-label="排序方式">
+            <option value="expiryAsc">过期最早</option>
+            <option value="expiryDesc">过期最晚</option>
+            <option value="nameAsc">名称 A-Z</option>
+            <option value="updatedDesc">最近更新</option>
           </select>
           <button class="ghost-button full-width" id="manageCategoriesButton" type="button">管理分类</button>
         </section>
@@ -200,6 +206,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=14" type="module"></script>
+    <script src="./app.js?v=15" type="module"></script>
   </body>
 </html>

@@ -1,7 +1,7 @@
 const DB_NAME = "pantry-organizer";
 const DB_VERSION = 1;
 const STORE_NAME = "items";
-const DEFAULT_CATEGORIES = ["调料", "干货", "冷藏", "冷冻", "罐头", "烘焙", "饮品", "其他"];
+const DEFAULT_CATEGORIES = ["调料", "干货", "速食", "冷藏", "冷冻", "罐头", "烘焙", "饮品", "其他"];
 const STORAGE_KEY = "pantry-organizer-fallback";
 const CATEGORIES_KEY = "pantry-organizer-categories";
 const BACKUP_CHUNK_SIZE = 180000;
@@ -13,6 +13,7 @@ const state = {
   categories: [...DEFAULT_CATEGORIES],
   status: "all",
   category: "all",
+  sort: "expiryAsc",
   query: "",
   db: null,
   fallback: false,
@@ -44,6 +45,7 @@ const els = {
   searchInput: $("searchInput"),
   statusFilter: $("statusFilter"),
   categoryFilter: $("categoryFilter"),
+  sortSelect: $("sortSelect"),
   manageCategoriesButton: $("manageCategoriesButton"),
   totalCount: $("totalCount"),
   soonCount: $("soonCount"),
@@ -123,6 +125,10 @@ function bindEvents() {
   });
   on(els.categoryFilter, "change", () => {
     state.category = els.categoryFilter.value;
+    render();
+  });
+  on(els.sortSelect, "change", () => {
+    state.sort = els.sortSelect.value;
     render();
   });
   on(els.manageCategoriesButton, "click", () => openCategoryManager());
@@ -247,6 +253,9 @@ function handleParse() {
   }
 
   state.drafts = parsePantryText(text);
+  for (const draft of state.drafts) {
+    draft.category = ensureCategory(draft.category);
+  }
   renderDrafts();
   els.draftPanel.classList.toggle("is-hidden", state.drafts.length === 0);
   if (state.drafts.length) showToast(`整理出 ${state.drafts.length} 条`);
@@ -270,7 +279,7 @@ function parsePantryText(text) {
     return {
       id: createId(),
       name: cleanName || chunk.slice(0, 18) || "未命名",
-      category: guessCategory(chunk),
+      category: extractCategory(chunk) || extractCategory(normalized) || guessCategory(chunk),
       expireDate: dateInfo?.date || "",
       expireDatePrecision: dateInfo?.precision || "unknown",
       quantity: quantityInfo?.quantity || "",
@@ -292,6 +301,7 @@ function splitItems(text) {
     .filter((part) => !isDetailClause(part));
   const datedClauses = clauses.filter((part) => /过期|到期|保质期|用完|\d{4}\s*[-/.年]|\d{1,2}\s*月|明年|后年|今年/.test(part));
 
+  if (datedClauses.length === 1 && clauses.length > 1) return [clauses.join("，")];
   if (datedClauses.length) return datedClauses.slice(0, 8);
 
   const byConnector = cleaned
@@ -303,7 +313,7 @@ function splitItems(text) {
 }
 
 function isDetailClause(text) {
-  return /^(都)?(放在|放到|放|位置|备注|开封|已开封|数量)/.test(text.trim());
+  return /^(都)?(放在|放到|放|位置|备注|开封|已开封|数量|分类|种类|类别)/.test(text.trim());
 }
 
 function extractName(text) {
@@ -313,7 +323,8 @@ function extractName(text) {
     .replace(/\d{4}\s*[年/-]\s*\d{1,2}.*/, "")
     .replace(/\d{1,2}\s*月.*/, "")
     .replace(/(过期|到期|保质期|用完|放在|放|备注|数量|开封).*/, "")
-    .replace(/\d+(\.\d+)?\s*(瓶|包|袋|罐|盒|个|斤|克|g|kg|ml|l|升|毫升)/i, "")
+    .replace(/[一二两三四五六七八九十百\d]+(\.\d+)?\s*(瓶|包|袋|罐|盒|个|斤|克|g|kg|ml|l|升|毫升)/i, "")
+    .replace(/(?:分类|种类|类别)(?:是|为|:|：)?\s*[^，,。；;]+/, "")
     .trim();
   value = value.replace(/^[，,、\s]+|[，,、\s]+$/g, "");
   return value;
@@ -363,14 +374,20 @@ function extractNotes(text) {
   return match ? match[1].trim() : "";
 }
 
+function extractCategory(text) {
+  const match = text.match(/(?:分类|种类|类别)(?:是|为|:|：)?\s*([^，,。；;]+)/);
+  return match ? normalizeCategoryName(match[1]) : "";
+}
+
 function extractQuantity(text) {
-  const match = text.match(/(\d+(?:\.\d+)?)\s*(瓶|包|袋|罐|盒|个|斤|克|g|kg|ml|l|升|毫升)/i);
-  return match ? { quantity: Number(match[1]), unit: match[2] } : null;
+  const match = text.match(/([一二两三四五六七八九十百\d]+(?:\.\d+)?)\s*(瓶|包|袋|罐|盒|个|斤|克|g|kg|ml|l|升|毫升)/i);
+  return match ? { quantity: parseChineseNumber(match[1]), unit: match[2] } : null;
 }
 
 function guessCategory(text) {
   if (/酱油|生抽|老抽|醋|盐|糖|胡椒|花椒|八角|桂皮|孜然|辣椒|豆瓣|味淋|料酒|蚝油|香油|调料|香料|酱/.test(text)) return "调料";
   if (/木耳|香菇|米|面|粉|豆|干|紫菜|海带/.test(text)) return "干货";
+  if (/速食|方便面|泡面|拉面|自热|即食|罐装粥|八宝粥|麦片|燕麦杯|螺蛳粉|酸辣粉/.test(text)) return "速食";
   if (/牛奶|酸奶|奶酪|鸡蛋|豆腐|冷藏/.test(text)) return "冷藏";
   if (/冷冻|冻|冰箱冷冻|速冻/.test(text)) return "冷冻";
   if (/罐头|罐/.test(text)) return "罐头";
@@ -498,8 +515,7 @@ function orderCategories(categories) {
 }
 
 function render() {
-  const sorted = [...state.items].sort(compareByExpiry);
-  const filtered = sorted.filter(matchesFilters);
+  const filtered = state.items.filter(matchesFilters).sort(compareItems);
   const soon = state.items.filter((item) => getExpiryStatus(item.expireDate) === "soon").length;
   const expired = state.items.filter((item) => getExpiryStatus(item.expireDate) === "expired").length;
 
@@ -741,6 +757,13 @@ function compareByExpiry(a, b) {
   if (!a.expireDate) return 1;
   if (!b.expireDate) return -1;
   return a.expireDate.localeCompare(b.expireDate);
+}
+
+function compareItems(a, b) {
+  if (state.sort === "expiryDesc") return compareByExpiry(b, a);
+  if (state.sort === "nameAsc") return a.name.localeCompare(b.name, "zh-Hans-CN");
+  if (state.sort === "updatedDesc") return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+  return compareByExpiry(a, b);
 }
 
 function getExpiryStatus(date) {
@@ -1081,8 +1104,12 @@ function lastDayOfMonth(year, month) {
 }
 
 function parseChineseNumber(value) {
-  if (/^\d+$/.test(value)) return Number(value);
+  if (/^\d+(\.\d+)?$/.test(value)) return Number(value);
   const digits = { 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  if (value.includes("百")) {
+    const [hundreds, rest = ""] = value.split("百");
+    return (digits[hundreds] || 1) * 100 + (rest ? parseChineseNumber(rest) : 0);
+  }
   if (value === "十") return 10;
   if (value.startsWith("十")) return 10 + (digits[value[1]] || 0);
   if (value.includes("十")) {
