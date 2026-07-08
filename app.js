@@ -1,7 +1,8 @@
 const DB_NAME = "pantry-organizer";
 const DB_VERSION = 1;
 const STORE_NAME = "items";
-const DEFAULT_CATEGORIES = ["调料", "干货", "速食", "冷藏", "冷冻", "罐头", "烘焙", "饮品", "其他"];
+const DEFAULT_CATEGORIES = ["调料", "干货", "速食", "零食", "冷藏", "冷冻", "罐头", "烘焙", "饮品", "其他"];
+const DEFAULT_LOCATIONS = ["方便面柜", "零食柜", "工具柜", "烘焙柜", "储物柜", "调料柜", "冰箱"];
 const STORAGE_KEY = "pantry-organizer-fallback";
 const CATEGORIES_KEY = "pantry-organizer-categories";
 const BACKUP_CHUNK_SIZE = 180000;
@@ -13,6 +14,7 @@ const state = {
   categories: [...DEFAULT_CATEGORIES],
   status: "all",
   category: "all",
+  location: "all",
   sort: "expiryAsc",
   query: "",
   db: null,
@@ -45,6 +47,7 @@ const els = {
   searchInput: $("searchInput"),
   statusFilter: $("statusFilter"),
   categoryFilter: $("categoryFilter"),
+  locationFilter: $("locationFilter"),
   sortSelect: $("sortSelect"),
   manageCategoriesButton: $("manageCategoriesButton"),
   totalCount: $("totalCount"),
@@ -101,6 +104,7 @@ async function init() {
   await loadItems();
   syncCategoriesFromItems();
   refreshCategoryControls();
+  refreshLocationControls();
   renderCategoryList();
   render();
 }
@@ -125,6 +129,10 @@ function bindEvents() {
   });
   on(els.categoryFilter, "change", () => {
     state.category = els.categoryFilter.value;
+    render();
+  });
+  on(els.locationFilter, "change", () => {
+    state.location = els.locationFilter.value;
     render();
   });
   on(els.sortSelect, "change", () => {
@@ -388,6 +396,7 @@ function guessCategory(text) {
   if (/酱油|生抽|老抽|醋|盐|糖|胡椒|花椒|八角|桂皮|孜然|辣椒|豆瓣|味淋|料酒|蚝油|香油|调料|香料|酱/.test(text)) return "调料";
   if (/木耳|香菇|米|面|粉|豆|干|紫菜|海带/.test(text)) return "干货";
   if (/速食|方便面|泡面|拉面|自热|即食|罐装粥|八宝粥|麦片|燕麦杯|螺蛳粉|酸辣粉/.test(text)) return "速食";
+  if (/零食|薯片|饼干|曲奇|糖果|巧克力|坚果|海苔|果冻|辣条|爆米花|小吃/.test(text)) return "零食";
   if (/牛奶|酸奶|奶酪|鸡蛋|豆腐|冷藏/.test(text)) return "冷藏";
   if (/冷冻|冻|冰箱冷冻|速冻/.test(text)) return "冷冻";
   if (/罐头|罐/.test(text)) return "罐头";
@@ -436,6 +445,30 @@ function refreshCategoryControls() {
     els.itemCategory.append(new Option(category, category));
   }
   els.itemCategory.value = state.categories.includes(previousItemCategory) ? previousItemCategory : "其他";
+}
+
+function refreshLocationControls() {
+  if (!els.locationFilter) return;
+  const previousLocation = els.locationFilter.value || state.location;
+  const locations = getLocationOptions();
+  els.locationFilter.replaceChildren(new Option("所有位置", "all"));
+  for (const location of locations) {
+    els.locationFilter.append(new Option(location, location));
+  }
+  els.locationFilter.value = locations.includes(previousLocation) ? previousLocation : "all";
+  state.location = els.locationFilter.value;
+}
+
+function getLocationOptions() {
+  const fromItems = state.items.map((item) => normalizeLocationName(item.location)).filter(Boolean);
+  return [...new Set([...DEFAULT_LOCATIONS, ...fromItems])].sort((a, b) => {
+    const aIndex = DEFAULT_LOCATIONS.indexOf(a);
+    const bIndex = DEFAULT_LOCATIONS.indexOf(b);
+    if (aIndex >= 0 && bIndex >= 0) return aIndex - bIndex;
+    if (aIndex >= 0) return -1;
+    if (bIndex >= 0) return 1;
+    return a.localeCompare(b, "zh-Hans-CN");
+  });
 }
 
 function renderCategoryList() {
@@ -505,6 +538,13 @@ function normalizeCategoryName(value) {
     .trim()
     .replace(/\s+/g, " ")
     .slice(0, 16);
+}
+
+function normalizeLocationName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 24);
 }
 
 function orderCategories(categories) {
@@ -661,6 +701,7 @@ async function saveDrafts() {
     await saveItem(normalizeItem(draft));
   }
   await loadItems();
+  refreshLocationControls();
   clearDrafts();
   els.quickInput.value = "";
   render();
@@ -709,6 +750,7 @@ async function handleItemSubmit(event) {
   });
   await saveItem(item);
   await loadItems();
+  refreshLocationControls();
   els.itemDialog.close();
   render();
   showToast("已保存");
@@ -719,6 +761,7 @@ async function deleteCurrentItem() {
   if (!id) return;
   await removeItem(id);
   await loadItems();
+  refreshLocationControls();
   els.itemDialog.close();
   render();
   showToast("已删除");
@@ -734,7 +777,7 @@ function normalizeItem(item) {
     expireDatePrecision: item.expireDatePrecision || (item.expireDate ? "day" : "unknown"),
     quantity: item.quantity === "" || item.quantity == null ? "" : Number(item.quantity),
     unit: String(item.unit || "").trim(),
-    location: String(item.location || "").trim(),
+    location: normalizeLocationName(item.location),
     opened: Boolean(item.opened),
     notes: String(item.notes || "").trim(),
     photoData: item.photoData || "",
@@ -748,6 +791,7 @@ function matchesFilters(item) {
   const haystack = [item.name, item.category, item.location, item.notes, item.unit].join(" ").toLowerCase();
   if (state.query && !haystack.includes(state.query)) return false;
   if (state.category !== "all" && item.category !== state.category) return false;
+  if (state.location !== "all" && item.location !== state.location) return false;
   if (state.status !== "all" && getExpiryStatus(item.expireDate) !== state.status) return false;
   return true;
 }
@@ -952,6 +996,7 @@ async function importBackupText(text) {
   await loadItems();
   syncCategoriesFromItems();
   refreshCategoryControls();
+  refreshLocationControls();
   renderCategoryList();
   render();
   showToast(`导入了 ${incoming.length} 条`);
