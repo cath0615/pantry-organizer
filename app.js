@@ -3,6 +3,7 @@ const DB_VERSION = 1;
 const STORE_NAME = "items";
 const DEFAULT_CATEGORIES = ["调料", "干货", "速食", "零食", "冷藏", "冷冻", "罐头", "烘焙", "饮品", "其他"];
 const DEFAULT_LOCATIONS = ["方便面柜", "零食柜", "工具柜", "烘焙柜", "储物柜", "调料柜", "冰箱"];
+const QUANTITY_UNITS = "瓶|包|袋|罐|盒|个|斤|克|g|kg|ml|l|升|毫升|板|条|片|块|枚|根|支|箱|组|套|杯";
 const STORAGE_KEY = "pantry-organizer-fallback";
 const CATEGORIES_KEY = "pantry-organizer-categories";
 const BACKUP_CHUNK_SIZE = 180000;
@@ -278,11 +279,12 @@ function parsePantryText(text) {
   const chunks = splitItems(normalized);
   const sharedLocation = extractLocation(normalized);
   const sharedNotes = extractNotes(normalized);
+  const sharedQuantity = extractQuantity(normalized);
 
   return chunks.map((chunk) => {
     const dateInfo = extractDate(chunk) || extractDate(normalized);
     const opened = /开封|打开|已开/.test(chunk);
-    const quantityInfo = extractQuantity(chunk);
+    const quantityInfo = extractQuantity(chunk) || sharedQuantity;
     const cleanName = extractName(chunk);
     const location = extractLocation(chunk) || sharedLocation || "";
     const category = categoryForLocation(location) || extractCategory(chunk) || extractCategory(normalized) || guessCategory(chunk);
@@ -333,7 +335,7 @@ function extractName(text) {
     .replace(/\d{4}\s*[年/.-]\s*\d{1,2}.*/, "")
     .replace(/\d{1,2}\s*月.*/, "")
     .replace(/(过期|到期|保质期|用完|放在|放|备注|数量|开封).*/, "")
-    .replace(/[一二两三四五六七八九十百\d]+(\.\d+)?\s*(瓶|包|袋|罐|盒|个|斤|克|g|kg|ml|l|升|毫升)/i, "")
+    .replace(new RegExp(`[一二两三四五六七八九十百\\d]+(\\.\\d+)?\\s*(${QUANTITY_UNITS})`, "i"), "")
     .replace(/(?:分类|种类|类别)(?:是|为|:|：)?\s*[^，,。；;]+/, "")
     .trim();
   value = value.replace(/^[，,、\s]+|[，,、\s]+$/g, "");
@@ -399,15 +401,15 @@ function extractCategory(text) {
 }
 
 function extractQuantity(text) {
-  const match = text.match(/([一二两三四五六七八九十百\d]+(?:\.\d+)?)\s*(瓶|包|袋|罐|盒|个|斤|克|g|kg|ml|l|升|毫升)/i);
+  const match = text.match(new RegExp(`(?:数量|数目|有)?\\s*([一二两三四五六七八九十百\\d]+(?:\\.\\d+)?)\\s*(${QUANTITY_UNITS})`, "i"));
   return match ? { quantity: parseChineseNumber(match[1]), unit: match[2] } : null;
 }
 
 function guessCategory(text) {
   if (/酱油|生抽|老抽|醋|盐|糖|胡椒|花椒|八角|桂皮|孜然|辣椒|豆瓣|味淋|料酒|蚝油|香油|调料|香料|酱/.test(text)) return "调料";
-  if (/木耳|香菇|米|面|粉|豆|干|紫菜|海带/.test(text)) return "干货";
-  if (/速食|方便面|泡面|拉面|自热|即食|罐装粥|八宝粥|麦片|燕麦杯|螺蛳粉|酸辣粉/.test(text)) return "速食";
   if (/零食|薯片|饼干|曲奇|糖果|巧克力|坚果|海苔|果冻|辣条|爆米花|小吃/.test(text)) return "零食";
+  if (/速食|方便面|泡面|拉面|自热|即食|罐装粥|八宝粥|麦片|燕麦杯|螺蛳粉|酸辣粉/.test(text)) return "速食";
+  if (/木耳|香菇|米|面|粉|豆|干货|紫菜|海带/.test(text)) return "干货";
   if (/牛奶|酸奶|奶酪|鸡蛋|豆腐|冷藏/.test(text)) return "冷藏";
   if (/冷冻|冻|冰箱冷冻|速冻/.test(text)) return "冷冻";
   if (/罐头|罐/.test(text)) return "罐头";
