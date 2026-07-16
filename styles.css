@@ -334,18 +334,48 @@ select:focus {
   gap: 8px;
 }
 
+.meal-day-tabs {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #eee2d1;
+}
+
+.meal-day-tabs button {
+  min-height: 34px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 0 4px;
+}
+
+.meal-day-tabs button.is-active {
+  background: var(--surface-strong);
+  color: var(--ink);
+  box-shadow: 0 1px 7px rgba(67, 48, 28, 0.1);
+}
+
 .meal-grid {
   display: grid;
   gap: 10px;
 }
 
 .meal-day-card {
-  display: grid;
+  display: none;
   gap: 9px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-strong);
   padding: 12px;
+}
+
+.meal-day-card.is-active {
+  display: grid;
 }
 
 .meal-slots {

@@ -34,6 +34,7 @@ const state = {
   backupChunks: [],
   activeChunkIndex: 0,
   fullBackupText: "",
+  activeMealDay: WEEK_DAYS[0],
   mealPlanner: {
     meals: {},
     ideas: "",
@@ -65,6 +66,7 @@ const els = {
   locationFilter: $("locationFilter"),
   sortSelect: $("sortSelect"),
   manageCategoriesButton: $("manageCategoriesButton"),
+  mealDayTabs: $("mealDayTabs"),
   mealGrid: $("mealGrid"),
   mealIdeasNote: $("mealIdeasNote"),
   shoppingNote: $("shoppingNote"),
@@ -163,6 +165,7 @@ function bindEvents() {
     render();
   });
   on(els.manageCategoriesButton, "click", () => openCategoryManager());
+  on(els.mealDayTabs, "click", switchMealDay);
   on(els.mealGrid, "input", saveMealPlanner);
   on(els.mealIdeasNote, "input", saveMealPlanner);
   on(els.shoppingNote, "input", saveMealPlanner);
@@ -212,11 +215,14 @@ function switchTab(event) {
 
 function renderMealPlanner() {
   if (!els.mealGrid) return;
+  renderMealDayTabs();
   els.mealGrid.replaceChildren();
 
   for (const day of WEEK_DAYS) {
     const card = document.createElement("article");
     card.className = "meal-day-card";
+    card.dataset.day = day;
+    card.classList.toggle("is-active", day === state.activeMealDay);
 
     const title = document.createElement("h3");
     title.textContent = day;
@@ -243,6 +249,36 @@ function renderMealPlanner() {
 
     card.append(slots);
     els.mealGrid.append(card);
+  }
+}
+
+function renderMealDayTabs() {
+  if (!els.mealDayTabs) return;
+  els.mealDayTabs.replaceChildren();
+  for (const day of WEEK_DAYS) {
+    const button = document.createElement("button");
+    const isActive = day === state.activeMealDay;
+    button.type = "button";
+    button.role = "tab";
+    button.dataset.day = day;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", String(isActive));
+    button.textContent = day;
+    els.mealDayTabs.append(button);
+  }
+}
+
+function switchMealDay(event) {
+  const button = event.target.closest("button[data-day]");
+  if (!button) return;
+  state.activeMealDay = button.dataset.day;
+  for (const tabButton of els.mealDayTabs.querySelectorAll("button[data-day]")) {
+    const isActive = tabButton.dataset.day === state.activeMealDay;
+    tabButton.classList.toggle("is-active", isActive);
+    tabButton.setAttribute("aria-selected", String(isActive));
+  }
+  for (const card of els.mealGrid.querySelectorAll(".meal-day-card")) {
+    card.classList.toggle("is-active", card.dataset.day === state.activeMealDay);
   }
 }
 
