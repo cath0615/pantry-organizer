@@ -59,6 +59,31 @@ button {
   margin: 4px 0 18px;
 }
 
+.app-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  margin: 0 0 14px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #eee2d1;
+}
+
+.app-tabs button {
+  min-height: 40px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.app-tabs button.is-active {
+  background: var(--surface-strong);
+  color: var(--ink);
+  box-shadow: 0 1px 7px rgba(67, 48, 28, 0.1);
+}
+
 .eyebrow {
   margin: 0 0 2px;
   color: var(--accent-dark);
@@ -90,6 +115,15 @@ h3 {
 }
 
 main {
+  display: grid;
+  gap: 14px;
+}
+
+.tab-view {
+  display: none;
+}
+
+.tab-view.is-active {
   display: grid;
   gap: 14px;
 }

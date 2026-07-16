@@ -52,6 +52,7 @@ const els = {
   clearInputButton: $("clearInputButton"),
   voiceButton: $("voiceButton"),
   voiceLabel: $("voiceLabel"),
+  appTabs: $("appTabs"),
   draftPanel: $("draftPanel"),
   draftList: $("draftList"),
   saveDraftButton: $("saveDraftButton"),
@@ -138,6 +139,7 @@ function bindEvents() {
   });
   on(els.saveDraftButton, "click", saveDrafts);
   on(els.discardDraftButton, "click", clearDrafts);
+  on(els.appTabs, "click", switchTab);
   on(els.searchInput, "input", () => {
     state.query = els.searchInput.value.trim().toLowerCase();
     render();
@@ -192,6 +194,20 @@ function bindEvents() {
     addCategoryFromInput();
   });
   on(els.categoryList, "click", deleteCategoryFromList);
+}
+
+function switchTab(event) {
+  const button = event.target.closest("button[data-tab]");
+  if (!button) return;
+  const activeTab = button.dataset.tab;
+  for (const tabButton of els.appTabs.querySelectorAll("button[data-tab]")) {
+    const isActive = tabButton.dataset.tab === activeTab;
+    tabButton.classList.toggle("is-active", isActive);
+    tabButton.setAttribute("aria-selected", String(isActive));
+  }
+  for (const panel of document.querySelectorAll("[data-tab-panel]")) {
+    panel.classList.toggle("is-active", panel.dataset.tabPanel === activeTab);
+  }
 }
 
 function renderMealPlanner() {

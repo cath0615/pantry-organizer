@@ -10,7 +10,7 @@
     <title>Pantry Organizer</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=22" />
+    <link rel="stylesheet" href="./styles.css?v=23" />
   </head>
   <body>
     <div class="app-shell">
@@ -24,104 +24,122 @@
         </button>
       </header>
 
+      <nav class="app-tabs" id="appTabs" aria-label="页面" role="tablist">
+        <button
+          class="is-active"
+          type="button"
+          role="tab"
+          data-tab="pantry"
+          aria-controls="pantryView"
+          aria-selected="true"
+        >
+          库存
+        </button>
+        <button type="button" role="tab" data-tab="meal" aria-controls="mealView" aria-selected="false">Meal Plan</button>
+      </nav>
+
       <main>
-        <section class="capture-panel" aria-labelledby="captureTitle">
-          <div class="capture-heading">
-            <h2 id="captureTitle">添加食材</h2>
-            <button class="voice-button" id="voiceButton" type="button">
-              <span class="voice-dot" aria-hidden="true"></span>
-              <span id="voiceLabel">语音</span>
-            </button>
-          </div>
-          <textarea
-            id="quickInput"
-            rows="4"
-            placeholder="例如：买了生抽明年三月过期，放厨房柜子，备注开封后冷藏"
-          ></textarea>
-          <div class="capture-actions">
-            <button class="primary-button" id="parseButton" type="button">整理</button>
-            <button class="ghost-button" id="clearInputButton" type="button">清空</button>
-          </div>
-        </section>
-
-        <section class="draft-panel is-hidden" id="draftPanel" aria-labelledby="draftTitle">
-          <div class="section-title-row">
-            <h2 id="draftTitle">确认记录</h2>
-            <button class="ghost-button compact" id="discardDraftButton" type="button">取消</button>
-          </div>
-          <div class="draft-list" id="draftList"></div>
-          <button class="primary-button full-width" id="saveDraftButton" type="button">保存</button>
-        </section>
-
-        <section class="toolbar" aria-label="筛选和搜索">
-          <label class="search-field">
-            <span aria-hidden="true">⌕</span>
-            <input id="searchInput" type="search" placeholder="搜索名称、备注、位置" />
-          </label>
-          <div class="segmented" id="statusFilter">
-            <button class="is-active" type="button" data-status="all">全部</button>
-            <button type="button" data-status="soon">快过期</button>
-            <button type="button" data-status="expired">已过期</button>
-          </div>
-          <select id="categoryFilter" aria-label="分类筛选">
-            <option value="all">所有分类</option>
-          </select>
-          <select id="locationFilter" aria-label="位置筛选">
-            <option value="all">所有位置</option>
-          </select>
-          <select id="sortSelect" aria-label="排序方式">
-            <option value="expiryAsc">过期最早</option>
-            <option value="expiryDesc">过期最晚</option>
-            <option value="nameAsc">名称 A-Z</option>
-            <option value="updatedDesc">最近更新</option>
-          </select>
-          <button class="ghost-button full-width" id="manageCategoriesButton" type="button">管理分类</button>
-        </section>
-
-        <section class="summary-grid" aria-label="概览">
-          <div>
-            <span id="totalCount">0</span>
-            <p>全部</p>
-          </div>
-          <div>
-            <span id="soonCount">0</span>
-            <p>30 天内</p>
-          </div>
-          <div>
-            <span id="expiredCount">0</span>
-            <p>已过期</p>
-          </div>
-        </section>
-
-        <section class="meal-planner" aria-labelledby="mealPlannerTitle">
-          <div class="section-title-row">
-            <h2 id="mealPlannerTitle">一周 Meal Plan</h2>
-            <div class="planner-actions">
-              <button class="ghost-button compact" id="clearMealPlanButton" type="button">清空计划</button>
-              <button class="ghost-button compact" id="clearMealNotesButton" type="button">清空备忘</button>
+        <div class="tab-view is-active" id="pantryView" data-tab-panel="pantry">
+          <section class="capture-panel" aria-labelledby="captureTitle">
+            <div class="capture-heading">
+              <h2 id="captureTitle">添加食材</h2>
+              <button class="voice-button" id="voiceButton" type="button">
+                <span class="voice-dot" aria-hidden="true"></span>
+                <span id="voiceLabel">语音</span>
+              </button>
             </div>
-          </div>
-          <div class="meal-grid" id="mealGrid"></div>
-          <div class="planner-notes-grid">
-            <label class="planner-note">
-              想吃什么
-              <textarea id="mealIdeasNote" rows="4" placeholder="下周想吃的菜、灵感、剩菜安排"></textarea>
-            </label>
-            <label class="planner-note">
-              要买什么
-              <textarea id="shoppingNote" rows="4" placeholder="补货清单、临时想到的东西"></textarea>
-            </label>
-          </div>
-        </section>
+            <textarea
+              id="quickInput"
+              rows="4"
+              placeholder="例如：买了生抽明年三月过期，放厨房柜子，备注开封后冷藏"
+            ></textarea>
+            <div class="capture-actions">
+              <button class="primary-button" id="parseButton" type="button">整理</button>
+              <button class="ghost-button" id="clearInputButton" type="button">清空</button>
+            </div>
+          </section>
 
-        <section class="items-section" aria-labelledby="itemsTitle">
-          <div class="section-title-row">
-            <h2 id="itemsTitle">库存</h2>
-            <button class="ghost-button compact" id="addBlankButton" type="button">添加/拍照</button>
-          </div>
-          <div class="item-list" id="itemList"></div>
-          <p class="empty-state" id="emptyState">还没有记录</p>
-        </section>
+          <section class="draft-panel is-hidden" id="draftPanel" aria-labelledby="draftTitle">
+            <div class="section-title-row">
+              <h2 id="draftTitle">确认记录</h2>
+              <button class="ghost-button compact" id="discardDraftButton" type="button">取消</button>
+            </div>
+            <div class="draft-list" id="draftList"></div>
+            <button class="primary-button full-width" id="saveDraftButton" type="button">保存</button>
+          </section>
+
+          <section class="toolbar" aria-label="筛选和搜索">
+            <label class="search-field">
+              <span aria-hidden="true">⌕</span>
+              <input id="searchInput" type="search" placeholder="搜索名称、备注、位置" />
+            </label>
+            <div class="segmented" id="statusFilter">
+              <button class="is-active" type="button" data-status="all">全部</button>
+              <button type="button" data-status="soon">快过期</button>
+              <button type="button" data-status="expired">已过期</button>
+            </div>
+            <select id="categoryFilter" aria-label="分类筛选">
+              <option value="all">所有分类</option>
+            </select>
+            <select id="locationFilter" aria-label="位置筛选">
+              <option value="all">所有位置</option>
+            </select>
+            <select id="sortSelect" aria-label="排序方式">
+              <option value="expiryAsc">过期最早</option>
+              <option value="expiryDesc">过期最晚</option>
+              <option value="nameAsc">名称 A-Z</option>
+              <option value="updatedDesc">最近更新</option>
+            </select>
+            <button class="ghost-button full-width" id="manageCategoriesButton" type="button">管理分类</button>
+          </section>
+
+          <section class="summary-grid" aria-label="概览">
+            <div>
+              <span id="totalCount">0</span>
+              <p>全部</p>
+            </div>
+            <div>
+              <span id="soonCount">0</span>
+              <p>30 天内</p>
+            </div>
+            <div>
+              <span id="expiredCount">0</span>
+              <p>已过期</p>
+            </div>
+          </section>
+
+          <section class="items-section" aria-labelledby="itemsTitle">
+            <div class="section-title-row">
+              <h2 id="itemsTitle">库存</h2>
+              <button class="ghost-button compact" id="addBlankButton" type="button">添加/拍照</button>
+            </div>
+            <div class="item-list" id="itemList"></div>
+            <p class="empty-state" id="emptyState">还没有记录</p>
+          </section>
+        </div>
+
+        <div class="tab-view" id="mealView" data-tab-panel="meal">
+          <section class="meal-planner" aria-labelledby="mealPlannerTitle">
+            <div class="section-title-row">
+              <h2 id="mealPlannerTitle">一周 Meal Plan</h2>
+              <div class="planner-actions">
+                <button class="ghost-button compact" id="clearMealPlanButton" type="button">清空计划</button>
+                <button class="ghost-button compact" id="clearMealNotesButton" type="button">清空备忘</button>
+              </div>
+            </div>
+            <div class="meal-grid" id="mealGrid"></div>
+            <div class="planner-notes-grid">
+              <label class="planner-note">
+                想吃什么
+                <textarea id="mealIdeasNote" rows="4" placeholder="下周想吃的菜、灵感、剩菜安排"></textarea>
+              </label>
+              <label class="planner-note">
+                要买什么
+                <textarea id="shoppingNote" rows="4" placeholder="补货清单、临时想到的东西"></textarea>
+              </label>
+            </div>
+          </section>
+        </div>
       </main>
     </div>
 
@@ -230,6 +248,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=22" type="module"></script>
+    <script src="./app.js?v=23" type="module"></script>
   </body>
 </html>
