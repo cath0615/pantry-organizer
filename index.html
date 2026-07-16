@@ -10,7 +10,7 @@
     <title>Pantry Organizer</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=21" />
+    <link rel="stylesheet" href="./styles.css?v=22" />
   </head>
   <body>
     <div class="app-shell">
@@ -90,6 +90,27 @@
           <div>
             <span id="expiredCount">0</span>
             <p>已过期</p>
+          </div>
+        </section>
+
+        <section class="meal-planner" aria-labelledby="mealPlannerTitle">
+          <div class="section-title-row">
+            <h2 id="mealPlannerTitle">一周 Meal Plan</h2>
+            <div class="planner-actions">
+              <button class="ghost-button compact" id="clearMealPlanButton" type="button">清空计划</button>
+              <button class="ghost-button compact" id="clearMealNotesButton" type="button">清空备忘</button>
+            </div>
+          </div>
+          <div class="meal-grid" id="mealGrid"></div>
+          <div class="planner-notes-grid">
+            <label class="planner-note">
+              想吃什么
+              <textarea id="mealIdeasNote" rows="4" placeholder="下周想吃的菜、灵感、剩菜安排"></textarea>
+            </label>
+            <label class="planner-note">
+              要买什么
+              <textarea id="shoppingNote" rows="4" placeholder="补货清单、临时想到的东西"></textarea>
+            </label>
           </div>
         </section>
 
@@ -209,6 +230,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=21" type="module"></script>
+    <script src="./app.js?v=22" type="module"></script>
   </body>
 </html>

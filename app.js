@@ -6,9 +6,16 @@ const DEFAULT_LOCATIONS = ["方便面柜", "零食柜", "工具柜", "烘焙柜"
 const QUANTITY_UNITS = "瓶|包|袋|罐|盒|个|斤|克|g|kg|ml|l|升|毫升|板|条|片|块|枚|根|支|箱|组|套|杯";
 const STORAGE_KEY = "pantry-organizer-fallback";
 const CATEGORIES_KEY = "pantry-organizer-categories";
+const MEAL_PLANNER_KEY = "pantry-organizer-meal-planner";
 const BACKUP_CHUNK_SIZE = 180000;
 const CHUNK_PREFIX = "PANTRY_BACKUP_PART";
 const QUANTITY_PHRASE = `(?:数量|数目|有)?\\s*[一二两三四五六七八九十百\\d]+(?:\\.\\d+)?\\s*(?:${QUANTITY_UNITS})`;
+const WEEK_DAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+const MEAL_SLOTS = [
+  { id: "breakfast", label: "早饭" },
+  { id: "lunch", label: "中饭" },
+  { id: "dinner", label: "晚饭" }
+];
 
 const state = {
   items: [],
@@ -26,7 +33,12 @@ const state = {
   pendingPhotoTasks: new Set(),
   backupChunks: [],
   activeChunkIndex: 0,
-  fullBackupText: ""
+  fullBackupText: "",
+  mealPlanner: {
+    meals: {},
+    ideas: "",
+    shopping: ""
+  }
 };
 
 const $ = (id) => document.getElementById(id);
@@ -52,6 +64,11 @@ const els = {
   locationFilter: $("locationFilter"),
   sortSelect: $("sortSelect"),
   manageCategoriesButton: $("manageCategoriesButton"),
+  mealGrid: $("mealGrid"),
+  mealIdeasNote: $("mealIdeasNote"),
+  shoppingNote: $("shoppingNote"),
+  clearMealPlanButton: $("clearMealPlanButton"),
+  clearMealNotesButton: $("clearMealNotesButton"),
   totalCount: $("totalCount"),
   soonCount: $("soonCount"),
   expiredCount: $("expiredCount"),
@@ -99,6 +116,8 @@ init();
 
 async function init() {
   loadCategories();
+  renderMealPlanner();
+  loadMealPlanner();
   bindEvents();
   setupSpeech();
   setupServiceWorker();
@@ -142,6 +161,11 @@ function bindEvents() {
     render();
   });
   on(els.manageCategoriesButton, "click", () => openCategoryManager());
+  on(els.mealGrid, "input", saveMealPlanner);
+  on(els.mealIdeasNote, "input", saveMealPlanner);
+  on(els.shoppingNote, "input", saveMealPlanner);
+  on(els.clearMealPlanButton, "click", clearMealPlan);
+  on(els.clearMealNotesButton, "click", clearMealNotes);
   on(els.addBlankButton, "click", () => openItemDialog());
   on(els.itemForm, "submit", handleItemSubmit);
   on(els.deleteItemButton, "click", deleteCurrentItem);
@@ -168,6 +192,97 @@ function bindEvents() {
     addCategoryFromInput();
   });
   on(els.categoryList, "click", deleteCategoryFromList);
+}
+
+function renderMealPlanner() {
+  if (!els.mealGrid) return;
+  els.mealGrid.replaceChildren();
+
+  for (const day of WEEK_DAYS) {
+    const card = document.createElement("article");
+    card.className = "meal-day-card";
+
+    const title = document.createElement("h3");
+    title.textContent = day;
+    card.append(title);
+
+    const slots = document.createElement("div");
+    slots.className = "meal-slots";
+
+    for (const meal of MEAL_SLOTS) {
+      const label = document.createElement("label");
+      label.className = "meal-slot";
+      label.textContent = meal.label;
+
+      const textarea = document.createElement("textarea");
+      textarea.className = "meal-input";
+      textarea.rows = 2;
+      textarea.dataset.day = day;
+      textarea.dataset.meal = meal.id;
+      textarea.placeholder = "未定";
+
+      label.append(textarea);
+      slots.append(label);
+    }
+
+    card.append(slots);
+    els.mealGrid.append(card);
+  }
+}
+
+function loadMealPlanner() {
+  if (!els.mealGrid) return;
+  try {
+    const saved = JSON.parse(localStorage.getItem(MEAL_PLANNER_KEY) || "{}");
+    state.mealPlanner = {
+      meals: saved.meals || {},
+      ideas: saved.ideas || "",
+      shopping: saved.shopping || ""
+    };
+  } catch {
+    state.mealPlanner = { meals: {}, ideas: "", shopping: "" };
+  }
+
+  for (const input of els.mealGrid.querySelectorAll(".meal-input")) {
+    const key = mealKey(input.dataset.day, input.dataset.meal);
+    input.value = state.mealPlanner.meals[key] || "";
+  }
+  if (els.mealIdeasNote) els.mealIdeasNote.value = state.mealPlanner.ideas;
+  if (els.shoppingNote) els.shoppingNote.value = state.mealPlanner.shopping;
+}
+
+function saveMealPlanner() {
+  if (!els.mealGrid) return;
+  const meals = {};
+  for (const input of els.mealGrid.querySelectorAll(".meal-input")) {
+    const value = input.value.trim();
+    if (!value) continue;
+    meals[mealKey(input.dataset.day, input.dataset.meal)] = value;
+  }
+  state.mealPlanner = {
+    meals,
+    ideas: els.mealIdeasNote?.value || "",
+    shopping: els.shoppingNote?.value || ""
+  };
+  localStorage.setItem(MEAL_PLANNER_KEY, JSON.stringify(state.mealPlanner));
+}
+
+function clearMealPlan() {
+  if (!els.mealGrid) return;
+  for (const input of els.mealGrid.querySelectorAll(".meal-input")) input.value = "";
+  saveMealPlanner();
+  showToast("已清空计划");
+}
+
+function clearMealNotes() {
+  if (els.mealIdeasNote) els.mealIdeasNote.value = "";
+  if (els.shoppingNote) els.shoppingNote.value = "";
+  saveMealPlanner();
+  showToast("已清空备忘");
+}
+
+function mealKey(day, meal) {
+  return `${day}:${meal}`;
 }
 
 function openBackupDialog() {
