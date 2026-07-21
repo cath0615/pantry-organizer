@@ -10,7 +10,7 @@
     <title>Pantry Organizer</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=29" />
+    <link rel="stylesheet" href="./styles.css?v=30" />
   </head>
   <body>
     <div class="app-shell">
@@ -345,6 +345,37 @@
         </div>
         <p class="backup-status" id="backupStatus">JSON 备份会包含图片；CSV 不包含图片。</p>
         <p class="backup-status" id="chunkStatus">照片多时可以逐段复制；导入时把所有分段文本粘到下面。</p>
+        <section class="sync-panel" aria-labelledby="syncTitle">
+          <h3 id="syncTitle">GitHub Sync</h3>
+          <div class="sync-grid">
+            <label>
+              Owner
+              <input id="githubOwner" autocomplete="off" placeholder="cath0615" />
+            </label>
+            <label>
+              Repo
+              <input id="githubRepo" autocomplete="off" placeholder="private-data-repo" />
+            </label>
+            <label>
+              Branch
+              <input id="githubBranch" autocomplete="off" placeholder="main" />
+            </label>
+            <label>
+              File path
+              <input id="githubPath" autocomplete="off" placeholder="pantry-data.json" />
+            </label>
+          </div>
+          <label>
+            Token
+            <input id="githubToken" autocomplete="off" type="password" placeholder="fine-grained token, 只存在这台设备" />
+          </label>
+          <div class="sync-actions">
+            <button class="ghost-button compact" id="saveSyncSettingsButton" type="button">保存设置</button>
+            <button class="primary-button compact" id="syncUploadButton" type="button">上传到 GitHub</button>
+            <button class="ghost-button compact" id="syncDownloadButton" type="button">从 GitHub 同步</button>
+          </div>
+          <p class="backup-status" id="syncStatus">电脑上传后，手机填同样设置再同步即可看到数据。</p>
+        </section>
         <section class="category-manager" aria-labelledby="categoryManagerTitle">
           <h3 id="categoryManagerTitle">分类管理</h3>
           <div class="category-add-row">
@@ -361,6 +392,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=29" type="module"></script>
+    <script src="./app.js?v=30" type="module"></script>
   </body>
 </html>

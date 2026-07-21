@@ -430,6 +430,36 @@ select:focus {
   gap: 10px;
 }
 
+.sync-panel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  padding: 12px;
+}
+
+.sync-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sync-panel label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.sync-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .recipe-count {
   color: var(--muted);
   font-size: 0.88rem;
@@ -821,7 +851,8 @@ dialog::backdrop {
 
   .planner-actions,
   .meal-slots,
-  .planner-notes-grid {
+  .planner-notes-grid,
+  .sync-grid {
     grid-template-columns: 1fr;
   }
 
