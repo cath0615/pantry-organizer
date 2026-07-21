@@ -6,6 +6,7 @@ const DEFAULT_LOCATIONS = ["方便面柜", "零食柜", "工具柜", "烘焙柜"
 const QUANTITY_UNITS = "瓶|包|袋|罐|盒|个|斤|克|g|kg|ml|l|升|毫升|板|条|片|块|枚|根|支|箱|组|套|杯";
 const STORAGE_KEY = "pantry-organizer-fallback";
 const CATEGORIES_KEY = "pantry-organizer-categories";
+const LOCATIONS_KEY = "pantry-organizer-locations";
 const MEAL_PLANNER_KEY = "pantry-organizer-meal-planner";
 const RECIPES_KEY = "pantry-organizer-recipes";
 const BACKUP_CHUNK_SIZE = 180000;
@@ -22,6 +23,7 @@ const state = {
   items: [],
   drafts: [],
   categories: [...DEFAULT_CATEGORIES],
+  locations: [...DEFAULT_LOCATIONS],
   status: "all",
   category: "all",
   location: "all",
@@ -156,6 +158,7 @@ init();
 
 async function init() {
   loadCategories();
+  loadLocations();
   renderMealPlanner();
   loadMealPlanner();
   loadRecipes();
@@ -165,6 +168,7 @@ async function init() {
   await initStorage();
   await loadItems();
   syncCategoriesFromItems();
+  syncLocationsFromItems();
   refreshCategoryControls();
   refreshLocationControls();
   renderCategoryList();
@@ -893,6 +897,7 @@ function handleParse() {
   state.drafts = parsePantryText(text);
   for (const draft of state.drafts) {
     draft.category = ensureCategory(draft.category);
+    draft.location = ensureLocation(draft.location);
   }
   renderDrafts();
   els.draftPanel.classList.toggle("is-hidden", state.drafts.length === 0);
@@ -1120,11 +1125,67 @@ function refreshLocationControls() {
   }
   els.locationFilter.value = locations.includes(previousLocation) ? previousLocation : "all";
   state.location = els.locationFilter.value;
+  refreshItemLocationOptions();
 }
 
 function getLocationOptions() {
   const fromItems = state.items.map((item) => normalizeLocationName(item.location)).filter(Boolean);
-  return [...new Set([...DEFAULT_LOCATIONS, ...fromItems])].sort((a, b) => {
+  return orderLocations([...DEFAULT_LOCATIONS, ...state.locations, ...fromItems]);
+}
+
+function loadLocations() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LOCATIONS_KEY) || "[]");
+    state.locations = orderLocations([...DEFAULT_LOCATIONS, ...saved]);
+  } catch {
+    state.locations = [...DEFAULT_LOCATIONS];
+  }
+}
+
+function saveLocations() {
+  const custom = state.locations.filter((location) => !DEFAULT_LOCATIONS.includes(location));
+  localStorage.setItem(LOCATIONS_KEY, JSON.stringify(custom));
+}
+
+function syncLocationsFromItems() {
+  let changed = false;
+  for (const item of state.items) {
+    const location = normalizeLocationName(item.location);
+    if (!location || state.locations.includes(location)) continue;
+    state.locations = orderLocations([...state.locations, location]);
+    changed = true;
+  }
+  if (changed) saveLocations();
+}
+
+function ensureLocation(value) {
+  const location = normalizeLocationName(value);
+  if (!location) return "";
+  if (!state.locations.includes(location)) {
+    state.locations = orderLocations([...state.locations, location]);
+    saveLocations();
+    refreshLocationControls();
+  }
+  return location;
+}
+
+function refreshItemLocationOptions(selectedValue = null) {
+  if (!els.itemLocation) return;
+  const previousLocation = selectedValue ?? els.itemLocation.value ?? "";
+  const locations = getLocationOptions();
+  els.itemLocation.replaceChildren(new Option("未设置", ""));
+  for (const location of locations) {
+    els.itemLocation.append(new Option(location, location));
+  }
+  if (previousLocation && !locations.includes(previousLocation)) {
+    els.itemLocation.append(new Option(previousLocation, previousLocation));
+  }
+  els.itemLocation.value = previousLocation && [...locations, previousLocation].includes(previousLocation) ? previousLocation : "";
+}
+
+function orderLocations(locations) {
+  const unique = [...new Set(locations.map(normalizeLocationName).filter(Boolean))];
+  return unique.sort((a, b) => {
     const aIndex = DEFAULT_LOCATIONS.indexOf(a);
     const bIndex = DEFAULT_LOCATIONS.indexOf(b);
     if (aIndex >= 0 && bIndex >= 0) return aIndex - bIndex;
@@ -1308,7 +1369,7 @@ function renderDrafts() {
       </div>
       <div class="two-col">
         <label>单位<input data-field="unit" /></label>
-        <label>位置<input data-field="location" /></label>
+        <label>位置<select data-field="location"></select></label>
       </div>
       <label>备注<textarea data-field="notes" rows="2"></textarea></label>
       <label class="checkbox-row"><input data-field="opened" type="checkbox" /><span>已开封</span></label>
@@ -1336,7 +1397,13 @@ function renderDrafts() {
       photoInput.value = "";
       updateDraftPhotoPreview(card, "");
     });
-    card.querySelector("select").append(...state.categories.map((category) => new Option(category, category)));
+    const categorySelect = card.querySelector('select[data-field="category"]');
+    categorySelect.append(...state.categories.map((category) => new Option(category, category)));
+    const locationSelect = card.querySelector('select[data-field="location"]');
+    locationSelect.append(new Option("未设置", ""));
+    for (const location of getLocationOptions()) {
+      locationSelect.append(new Option(location, location));
+    }
     for (const input of card.querySelectorAll("[data-field]")) {
       const field = input.dataset.field;
       if (input.type === "checkbox") input.checked = Boolean(draft[field]);
@@ -1388,6 +1455,7 @@ function openItemDialog(item = null) {
   els.itemExpireDate.value = item?.expireDate || "";
   els.itemQuantity.value = item?.quantity ?? "";
   els.itemUnit.value = item?.unit || "";
+  refreshItemLocationOptions(item?.location || "");
   els.itemLocation.value = item?.location || "";
   els.itemNotes.value = item?.notes || "";
   els.itemOpened.checked = Boolean(item?.opened);
@@ -1431,7 +1499,7 @@ async function deleteCurrentItem() {
 }
 
 function normalizeItem(item) {
-  const location = normalizeLocationName(item.location);
+  const location = ensureLocation(item.location);
   const category = ensureCategory(categoryForLocation(location) || item.category);
   return {
     id: item.id || createId(),
@@ -1564,6 +1632,7 @@ function exportJson() {
     version: 1,
     exportedAt: new Date().toISOString(),
     categories: state.categories,
+    locations: state.locations,
     items: state.items
   };
   const content = JSON.stringify(payload);
@@ -1654,11 +1723,17 @@ async function importBackupText(text) {
     refreshCategoryControls();
     renderCategoryList();
   }
+  if (Array.isArray(payload.locations)) {
+    state.locations = orderLocations([...state.locations, ...payload.locations]);
+    saveLocations();
+    refreshLocationControls();
+  }
   for (const item of incoming) {
     await saveItem(normalizeItem({ ...item, id: item.id || createId() }));
   }
   await loadItems();
   syncCategoriesFromItems();
+  syncLocationsFromItems();
   refreshCategoryControls();
   refreshLocationControls();
   renderCategoryList();
