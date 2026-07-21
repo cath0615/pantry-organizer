@@ -398,6 +398,10 @@ select:focus {
   margin-top: 0;
 }
 
+.planner-note textarea {
+  min-height: 180px;
+}
+
 .meal-slot textarea {
   min-height: 66px;
   resize: vertical;
