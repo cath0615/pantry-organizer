@@ -20,6 +20,7 @@ const SYNC_TARGETS = {
   meal: { label: "Meal Plan", file: "meal-plan.json" },
   recipes: { label: "Recipes", file: "recipes-data.json" }
 };
+const CUSTOM_CATEGORY_VALUE = "__custom_category__";
 const BACKUP_CHUNK_SIZE = 180000;
 const CHUNK_PREFIX = "PANTRY_BACKUP_PART";
 const QUANTITY_PHRASE = `(?:数量|数目|有)?\\s*[一二两三四五六七八九十百\\d]+(?:\\.\\d+)?\\s*(?:${QUANTITY_UNITS})`;
@@ -136,7 +137,7 @@ const els = {
   removePhotoButton: $("removePhotoButton"),
   itemName: $("itemName"),
   itemCategory: $("itemCategory"),
-  itemCategoryOptions: $("itemCategoryOptions"),
+  itemCustomCategory: $("itemCustomCategory"),
   itemExpireDate: $("itemExpireDate"),
   itemQuantity: $("itemQuantity"),
   itemUnit: $("itemUnit"),
@@ -251,6 +252,7 @@ function bindEvents() {
   on(els.recipeSelectedTags, "click", removeRecipeCategoryFromDialog);
   on(els.addBlankButton, "click", () => openItemDialog());
   on(els.itemForm, "submit", handleItemSubmit);
+  on(els.itemCategory, "change", () => updateCustomCategoryVisibility());
   on(els.deleteItemButton, "click", deleteCurrentItem);
   on(els.closeItemDialogButton, "click", () => els.itemDialog.close());
   on(els.itemPhotoInput, "change", handlePhotoInput);
@@ -1104,7 +1106,7 @@ function syncCategoriesFromItems() {
 
 function refreshCategoryControls() {
   const previousFilter = els.categoryFilter.value || state.category;
-  const previousItemCategory = els.itemCategory.value || "其他";
+  const previousItemCategory = getItemDialogCategory();
 
   els.categoryFilter.replaceChildren(new Option("所有分类", "all"));
   for (const category of state.categories) {
@@ -1113,11 +1115,12 @@ function refreshCategoryControls() {
   els.categoryFilter.value = state.categories.includes(previousFilter) ? previousFilter : "all";
   state.category = els.categoryFilter.value;
 
-  if (els.itemCategoryOptions) els.itemCategoryOptions.replaceChildren();
+  els.itemCategory.replaceChildren();
   for (const category of state.categories) {
-    if (els.itemCategoryOptions) els.itemCategoryOptions.append(new Option(category, category));
+    els.itemCategory.append(new Option(category, category));
   }
-  els.itemCategory.value = state.categories.includes(previousItemCategory) ? previousItemCategory : "其他";
+  els.itemCategory.append(new Option("新分类...", CUSTOM_CATEGORY_VALUE));
+  setItemCategoryControl(previousItemCategory);
 }
 
 function refreshLocationControls() {
@@ -1208,6 +1211,31 @@ function ensureCategory(value) {
     refreshCategoryControls();
   }
   return category;
+}
+
+function setItemCategoryControl(category) {
+  const normalized = normalizeCategoryName(category) || "其他";
+  if (state.categories.includes(normalized)) {
+    els.itemCategory.value = normalized;
+    if (els.itemCustomCategory) els.itemCustomCategory.value = "";
+  } else {
+    els.itemCategory.value = CUSTOM_CATEGORY_VALUE;
+    if (els.itemCustomCategory) els.itemCustomCategory.value = normalized;
+  }
+  updateCustomCategoryVisibility();
+}
+
+function getItemDialogCategory() {
+  if (els.itemCategory?.value === CUSTOM_CATEGORY_VALUE) {
+    return els.itemCustomCategory?.value || "";
+  }
+  return els.itemCategory?.value || "其他";
+}
+
+function updateCustomCategoryVisibility() {
+  if (!els.itemCustomCategory || !els.itemCategory) return;
+  const isCustom = els.itemCategory.value === CUSTOM_CATEGORY_VALUE;
+  els.itemCustomCategory.classList.toggle("is-hidden", !isCustom);
 }
 
 function normalizeCategoryName(value) {
@@ -1314,8 +1342,8 @@ function renderDrafts() {
       </section>
       <div class="two-col">
         <label>名称<input data-field="name" /></label>
-        <label>分类<input data-field="category" list="draftCategoryOptions-${index}" /></label>
-        <datalist id="draftCategoryOptions-${index}"></datalist>
+        <label>分类<select data-field="category"></select></label>
+        <label class="draft-custom-category is-hidden">新分类<input data-custom-category /></label>
       </div>
       <div class="two-col">
         <label>过期日期<input data-field="expireDate" type="date" /></label>
@@ -1351,8 +1379,25 @@ function renderDrafts() {
       photoInput.value = "";
       updateDraftPhotoPreview(card, "");
     });
-    const categoryOptions = card.querySelector(`#draftCategoryOptions-${index}`);
-    categoryOptions.append(...state.categories.map((category) => new Option(category, category)));
+    const categorySelect = card.querySelector('select[data-field="category"]');
+    categorySelect.append(...state.categories.map((category) => new Option(category, category)));
+    categorySelect.append(new Option("新分类...", CUSTOM_CATEGORY_VALUE));
+    const customCategoryInput = card.querySelector("[data-custom-category]");
+    const customCategoryField = card.querySelector(".draft-custom-category");
+    const syncDraftCategoryControl = () => {
+      const isCustom = categorySelect.value === CUSTOM_CATEGORY_VALUE;
+      customCategoryField.classList.toggle("is-hidden", !isCustom);
+      draft.category = isCustom ? customCategoryInput.value : categorySelect.value;
+    };
+    if (state.categories.includes(draft.category)) {
+      categorySelect.value = draft.category;
+    } else {
+      categorySelect.value = CUSTOM_CATEGORY_VALUE;
+      customCategoryInput.value = draft.category || "";
+      customCategoryField.classList.remove("is-hidden");
+    }
+    categorySelect.addEventListener("change", syncDraftCategoryControl);
+    customCategoryInput.addEventListener("input", syncDraftCategoryControl);
     const locationSelect = card.querySelector('select[data-field="location"]');
     locationSelect.append(new Option("未设置", ""));
     for (const location of getLocationOptions()) {
@@ -1360,6 +1405,7 @@ function renderDrafts() {
     }
     for (const input of card.querySelectorAll("[data-field]")) {
       const field = input.dataset.field;
+      if (field === "category" && input.tagName === "SELECT") continue;
       if (input.type === "checkbox") input.checked = Boolean(draft[field]);
       else input.value = draft[field] ?? "";
       input.addEventListener("input", () => {
@@ -1405,7 +1451,7 @@ function openItemDialog(item = null) {
   setPhotoPreview(item?.photoData || "");
   if (els.itemPhotoInput) els.itemPhotoInput.value = "";
   els.itemName.value = item?.name || "";
-  els.itemCategory.value = item?.category || "其他";
+  setItemCategoryControl(item?.category || "其他");
   els.itemExpireDate.value = item?.expireDate || "";
   els.itemQuantity.value = item?.quantity ?? "";
   els.itemUnit.value = item?.unit || "";
@@ -1423,7 +1469,7 @@ async function handleItemSubmit(event) {
   const item = normalizeItem({
     id: els.itemId.value || createId(),
     name: els.itemName.value,
-    category: els.itemCategory.value,
+    category: getItemDialogCategory(),
     expireDate: els.itemExpireDate.value,
     quantity: els.itemQuantity.value,
     unit: els.itemUnit.value,
