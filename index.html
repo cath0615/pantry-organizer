@@ -10,7 +10,7 @@
     <title>Pantry Organizer</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=25" />
+    <link rel="stylesheet" href="./styles.css?v=27" />
   </head>
   <body>
     <div class="app-shell">
@@ -36,6 +36,7 @@
           库存
         </button>
         <button type="button" role="tab" data-tab="meal" aria-controls="mealView" aria-selected="false">Meal Plan</button>
+        <button type="button" role="tab" data-tab="recipes" aria-controls="recipesView" aria-selected="false">Recipes</button>
       </nav>
 
       <main>
@@ -141,6 +142,51 @@
             </div>
           </section>
         </div>
+
+        <div class="tab-view" id="recipesView" data-tab-panel="recipes">
+          <section class="recipe-capture" aria-labelledby="recipeCaptureTitle">
+            <div class="section-title-row">
+              <h2 id="recipeCaptureTitle">保存菜谱</h2>
+              <button class="ghost-button compact" id="addRecipeButton" type="button">手动添加</button>
+            </div>
+            <textarea
+              id="recipeLinkInput"
+              rows="4"
+              placeholder="粘贴小红书分享文案或链接"
+            ></textarea>
+            <input id="recipeTagsInput" autocomplete="off" placeholder="分类，例如：甜品，鸡肉，快手菜" />
+            <div class="capture-actions">
+              <button class="primary-button" id="saveRecipeLinkButton" type="button">编辑保存</button>
+              <button class="ghost-button" id="clearRecipeLinkButton" type="button">清空</button>
+            </div>
+          </section>
+
+          <section class="recipe-toolbar" aria-label="菜谱筛选">
+            <label class="search-field">
+              <span aria-hidden="true">⌕</span>
+              <input id="recipeSearchInput" type="search" placeholder="搜索菜名、分类、食材、备注" />
+            </label>
+            <select id="recipeTagFilter" aria-label="分类筛选">
+              <option value="all">所有分类</option>
+            </select>
+            <div class="recipe-backup-actions">
+              <button class="ghost-button" id="exportRecipesButton" type="button">下载 JSON</button>
+              <label class="file-button">
+                导入 JSON
+                <input id="importRecipesInput" type="file" accept="application/json,text/plain,.json,.txt" />
+              </label>
+            </div>
+          </section>
+
+          <section class="recipes-section" aria-labelledby="recipesTitle">
+            <div class="section-title-row">
+              <h2 id="recipesTitle">菜谱</h2>
+              <span class="recipe-count" id="recipeCount">0</span>
+            </div>
+            <div class="recipe-list" id="recipeList"></div>
+            <p class="empty-state" id="recipeEmptyState">还没有菜谱</p>
+          </section>
+        </div>
       </main>
     </div>
 
@@ -211,6 +257,61 @@
       </form>
     </dialog>
 
+    <dialog id="recipeDialog">
+      <form method="dialog" class="dialog-card" id="recipeForm">
+        <div class="section-title-row">
+          <h2 id="recipeDialogTitle">编辑菜谱</h2>
+          <button class="icon-button small" id="closeRecipeDialogButton" type="button" aria-label="关闭">×</button>
+        </div>
+        <input type="hidden" id="recipeId" />
+        <input type="hidden" id="recipeCoverData" />
+        <label>
+          菜名
+          <input id="recipeTitle" required autocomplete="off" />
+        </label>
+        <label>
+          链接
+          <input id="recipeUrl" type="url" autocomplete="off" />
+        </label>
+        <label>
+          分类
+          <input id="recipeTags" autocomplete="off" placeholder="甜品，鸡肉，牛肉" />
+        </label>
+        <section class="photo-field" aria-label="菜谱封面">
+          <div class="section-title-row">
+            <h3>封面</h3>
+            <label class="file-button compact">
+              上传封面
+              <input id="recipeCoverInput" type="file" accept="image/*" />
+            </label>
+          </div>
+          <div class="photo-preview is-empty" id="recipeCoverPreview">
+            <span>无封面</span>
+            <img id="recipeCoverPreviewImage" alt="菜谱封面预览" />
+          </div>
+          <div class="photo-actions">
+            <button class="ghost-button" id="removeRecipeCoverButton" type="button">移除封面</button>
+          </div>
+        </section>
+        <label>
+          食材
+          <textarea id="recipeIngredients" rows="4"></textarea>
+        </label>
+        <label>
+          步骤
+          <textarea id="recipeSteps" rows="5"></textarea>
+        </label>
+        <label>
+          Notes
+          <textarea id="recipeNotes" rows="3"></textarea>
+        </label>
+        <div class="dialog-actions">
+          <button class="danger-button" id="deleteRecipeButton" type="button">删除</button>
+          <button class="primary-button" value="default" type="submit">保存</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="backupDialog">
       <form method="dialog" class="dialog-card">
         <div class="section-title-row">
@@ -249,6 +350,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=25" type="module"></script>
+    <script src="./app.js?v=27" type="module"></script>
   </body>
 </html>

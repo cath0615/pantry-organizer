@@ -7,6 +7,7 @@ const QUANTITY_UNITS = "瓶|包|袋|罐|盒|个|斤|克|g|kg|ml|l|升|毫升|板
 const STORAGE_KEY = "pantry-organizer-fallback";
 const CATEGORIES_KEY = "pantry-organizer-categories";
 const MEAL_PLANNER_KEY = "pantry-organizer-meal-planner";
+const RECIPES_KEY = "pantry-organizer-recipes";
 const BACKUP_CHUNK_SIZE = 180000;
 const CHUNK_PREFIX = "PANTRY_BACKUP_PART";
 const QUANTITY_PHRASE = `(?:数量|数目|有)?\\s*[一二两三四五六七八九十百\\d]+(?:\\.\\d+)?\\s*(?:${QUANTITY_UNITS})`;
@@ -35,6 +36,9 @@ const state = {
   activeChunkIndex: 0,
   fullBackupText: "",
   activeMealDay: WEEK_DAYS[0],
+  recipes: [],
+  recipeQuery: "",
+  recipeTag: "all",
   mealPlanner: {
     meals: {},
     ideas: "",
@@ -72,6 +76,35 @@ const els = {
   shoppingNote: $("shoppingNote"),
   clearMealPlanButton: $("clearMealPlanButton"),
   clearMealNotesButton: $("clearMealNotesButton"),
+  recipeLinkInput: $("recipeLinkInput"),
+  recipeTagsInput: $("recipeTagsInput"),
+  saveRecipeLinkButton: $("saveRecipeLinkButton"),
+  clearRecipeLinkButton: $("clearRecipeLinkButton"),
+  addRecipeButton: $("addRecipeButton"),
+  recipeSearchInput: $("recipeSearchInput"),
+  recipeTagFilter: $("recipeTagFilter"),
+  exportRecipesButton: $("exportRecipesButton"),
+  importRecipesInput: $("importRecipesInput"),
+  recipeList: $("recipeList"),
+  recipeEmptyState: $("recipeEmptyState"),
+  recipeCount: $("recipeCount"),
+  recipeDialog: $("recipeDialog"),
+  recipeForm: $("recipeForm"),
+  recipeDialogTitle: $("recipeDialogTitle"),
+  recipeId: $("recipeId"),
+  recipeCoverData: $("recipeCoverData"),
+  recipeCoverInput: $("recipeCoverInput"),
+  recipeCoverPreview: $("recipeCoverPreview"),
+  recipeCoverPreviewImage: $("recipeCoverPreviewImage"),
+  removeRecipeCoverButton: $("removeRecipeCoverButton"),
+  recipeTitle: $("recipeTitle"),
+  recipeUrl: $("recipeUrl"),
+  recipeTags: $("recipeTags"),
+  recipeIngredients: $("recipeIngredients"),
+  recipeSteps: $("recipeSteps"),
+  recipeNotes: $("recipeNotes"),
+  deleteRecipeButton: $("deleteRecipeButton"),
+  closeRecipeDialogButton: $("closeRecipeDialogButton"),
   totalCount: $("totalCount"),
   soonCount: $("soonCount"),
   expiredCount: $("expiredCount"),
@@ -121,6 +154,7 @@ async function init() {
   loadCategories();
   renderMealPlanner();
   loadMealPlanner();
+  loadRecipes();
   bindEvents();
   setupSpeech();
   setupServiceWorker();
@@ -131,6 +165,7 @@ async function init() {
   refreshLocationControls();
   renderCategoryList();
   render();
+  renderRecipes();
 }
 
 function bindEvents() {
@@ -171,6 +206,24 @@ function bindEvents() {
   on(els.shoppingNote, "input", saveMealPlanner);
   on(els.clearMealPlanButton, "click", clearMealPlan);
   on(els.clearMealNotesButton, "click", clearMealNotes);
+  on(els.saveRecipeLinkButton, "click", saveRecipeFromLinkInput);
+  on(els.clearRecipeLinkButton, "click", clearRecipeLinkInput);
+  on(els.addRecipeButton, "click", () => openRecipeDialog());
+  on(els.recipeSearchInput, "input", () => {
+    state.recipeQuery = els.recipeSearchInput.value.trim().toLowerCase();
+    renderRecipes();
+  });
+  on(els.recipeTagFilter, "change", () => {
+    state.recipeTag = els.recipeTagFilter.value;
+    renderRecipes();
+  });
+  on(els.exportRecipesButton, "click", exportRecipes);
+  on(els.importRecipesInput, "change", importRecipes);
+  on(els.recipeForm, "submit", handleRecipeSubmit);
+  on(els.deleteRecipeButton, "click", deleteCurrentRecipe);
+  on(els.closeRecipeDialogButton, "click", () => els.recipeDialog.close());
+  on(els.recipeCoverInput, "change", handleRecipeCoverInput);
+  on(els.removeRecipeCoverButton, "click", removeCurrentRecipeCover);
   on(els.addBlankButton, "click", () => openItemDialog());
   on(els.itemForm, "submit", handleItemSubmit);
   on(els.deleteItemButton, "click", deleteCurrentItem);
@@ -335,6 +388,309 @@ function clearMealNotes() {
 
 function mealKey(day, meal) {
   return `${day}:${meal}`;
+}
+
+function loadRecipes() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(RECIPES_KEY) || "[]");
+    state.recipes = Array.isArray(saved) ? saved.map(normalizeRecipe).filter((recipe) => recipe.title) : [];
+  } catch {
+    state.recipes = [];
+  }
+}
+
+function saveRecipes() {
+  localStorage.setItem(RECIPES_KEY, JSON.stringify(state.recipes));
+}
+
+function saveRecipeFromLinkInput() {
+  const text = els.recipeLinkInput.value.trim();
+  if (!text) {
+    showToast("先粘贴链接");
+    return;
+  }
+  const url = extractRecipeUrl(text);
+  if (!url) {
+    showToast("没有找到链接");
+    return;
+  }
+  const existing = state.recipes.find((recipe) => recipe.url === url);
+  openRecipeDialog({
+    ...(existing || {}),
+    id: existing?.id || "",
+    title: existing?.title || extractRecipeTitle(text) || "未命名菜谱",
+    url,
+    tags: existing?.tags || parseTags(els.recipeTagsInput.value),
+    sourceText: text
+  });
+  showToast(existing ? "已打开已有菜谱" : "确认后保存");
+}
+
+function clearRecipeLinkInput() {
+  if (els.recipeLinkInput) els.recipeLinkInput.value = "";
+  if (els.recipeTagsInput) els.recipeTagsInput.value = "";
+}
+
+function extractRecipeUrl(text) {
+  const match = text.match(/https?:\/\/(?:www\.)?(?:xiaohongshu\.com|xhslink\.com|xhs\.cn|xhsurl\.com)\/[^\s，。；;,）)】]+/i);
+  return match ? match[0] : "";
+}
+
+function extractRecipeTitle(text) {
+  const withoutUrl = text
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/#\S+/g, " ")
+    .replace(/复制.*?小红书/g, " ")
+    .replace(/打开.*?小红书/g, " ")
+    .replace(/快来看/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const bracketMatch = withoutUrl.match(/[《【「](.*?)[》】」]/);
+  if (bracketMatch?.[1]) return cleanRecipeTitle(bracketMatch[1]);
+  const lines = text
+    .split(/\n|。|！|!/)
+    .map((line) => cleanRecipeTitle(line.replace(/https?:\/\/\S+/g, "").replace(/#\S+/g, "")))
+    .filter((line) => line && !/小红书|复制|打开|点击|链接|分享/.test(line));
+  return lines[0] || cleanRecipeTitle(withoutUrl);
+}
+
+function cleanRecipeTitle(value) {
+  return String(value || "")
+    .replace(/^[\s:：,，.。-]+|[\s:：,，.。-]+$/g, "")
+    .slice(0, 48);
+}
+
+function parseTags(value) {
+  return [
+    ...new Set(
+      String(value || "")
+        .split(/[，,、\s]+/)
+        .map((tag) => tag.trim().replace(/^#/, ""))
+        .filter(Boolean)
+        .map((tag) => tag.slice(0, 18))
+    )
+  ];
+}
+
+function renderRecipes() {
+  if (!els.recipeList) return;
+  const filtered = state.recipes.filter(matchesRecipeFilters).sort(compareRecipes);
+  refreshRecipeTagFilter();
+  els.recipeCount.textContent = `${filtered.length}/${state.recipes.length}`;
+  els.recipeList.innerHTML = "";
+  for (const recipe of filtered) {
+    els.recipeList.append(renderRecipeCard(recipe));
+  }
+  els.recipeEmptyState.classList.toggle("is-hidden", filtered.length > 0);
+}
+
+function refreshRecipeTagFilter() {
+  if (!els.recipeTagFilter) return;
+  const previous = els.recipeTagFilter.value || state.recipeTag;
+  const tags = getRecipeTags();
+  els.recipeTagFilter.replaceChildren(new Option("所有分类", "all"));
+  for (const tag of tags) {
+    els.recipeTagFilter.append(new Option(tag, tag));
+  }
+  els.recipeTagFilter.value = tags.includes(previous) ? previous : "all";
+  state.recipeTag = els.recipeTagFilter.value;
+}
+
+function getRecipeTags() {
+  return [...new Set(state.recipes.flatMap((recipe) => recipe.tags || []))].sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
+}
+
+function renderRecipeCard(recipe) {
+  const card = document.createElement("article");
+  card.className = "recipe-card";
+  card.innerHTML = `
+    <div class="recipe-thumb recipe-thumb-placeholder"></div>
+    <div class="recipe-card-content">
+      <button class="recipe-title-button" type="button"></button>
+      <div class="recipe-tags"></div>
+      <p class="recipe-summary"></p>
+      <a class="recipe-link" target="_blank" rel="noopener">打开链接</a>
+    </div>
+  `;
+  const thumb = card.querySelector(".recipe-thumb");
+  if (recipe.coverData) {
+    const image = document.createElement("img");
+    image.className = "recipe-thumb";
+    image.alt = "";
+    image.src = recipe.coverData;
+    thumb.replaceWith(image);
+  } else {
+    thumb.textContent = recipe.title.slice(0, 1) || "菜";
+  }
+  const titleButton = card.querySelector(".recipe-title-button");
+  titleButton.textContent = recipe.title;
+  titleButton.addEventListener("click", () => openRecipeDialog(recipe));
+  const tags = card.querySelector(".recipe-tags");
+  for (const tag of recipe.tags || []) {
+    const chip = document.createElement("span");
+    chip.className = "pill";
+    chip.textContent = tag;
+    tags.append(chip);
+  }
+  tags.classList.toggle("is-hidden", !recipe.tags?.length);
+  const summary = [recipe.ingredients, recipe.notes, recipe.steps].filter(Boolean).join(" · ");
+  const summaryElement = card.querySelector(".recipe-summary");
+  summaryElement.textContent = summary.slice(0, 120);
+  summaryElement.classList.toggle("is-hidden", !summary);
+  const link = card.querySelector(".recipe-link");
+  link.href = recipe.url || "#";
+  link.classList.toggle("is-hidden", !recipe.url);
+  return card;
+}
+
+function matchesRecipeFilters(recipe) {
+  const haystack = [recipe.title, recipe.url, recipe.tags?.join(" "), recipe.ingredients, recipe.steps, recipe.notes]
+    .join(" ")
+    .toLowerCase();
+  if (state.recipeQuery && !haystack.includes(state.recipeQuery)) return false;
+  if (state.recipeTag !== "all" && !recipe.tags?.includes(state.recipeTag)) return false;
+  return true;
+}
+
+function compareRecipes(a, b) {
+  return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+}
+
+function openRecipeDialog(recipe = null) {
+  const isEditing = Boolean(recipe?.id);
+  const isDraftFromLink = Boolean(recipe && recipe.url && !recipe.id);
+  els.recipeDialogTitle.textContent = isDraftFromLink ? "确认菜谱" : isEditing ? "编辑菜谱" : "手动添加";
+  els.recipeId.value = recipe?.id || "";
+  els.recipeTitle.value = recipe?.title || "";
+  els.recipeUrl.value = recipe?.url || "";
+  els.recipeTags.value = (recipe?.tags || []).join("，");
+  els.recipeIngredients.value = recipe?.ingredients || "";
+  els.recipeSteps.value = recipe?.steps || "";
+  els.recipeNotes.value = recipe?.notes || "";
+  setRecipeCoverPreview(recipe?.coverData || "");
+  if (els.recipeCoverInput) els.recipeCoverInput.value = "";
+  els.deleteRecipeButton.classList.toggle("is-hidden", !isEditing);
+  els.recipeDialog.showModal();
+  window.setTimeout(() => els.recipeTitle?.focus(), 80);
+}
+
+async function handleRecipeSubmit(event) {
+  event.preventDefault();
+  await waitForPendingPhotos();
+  const id = els.recipeId.value || createId();
+  const existing = state.recipes.find((recipe) => recipe.id === id);
+  const recipe = normalizeRecipe({
+    id,
+    title: els.recipeTitle.value,
+    url: els.recipeUrl.value,
+    tags: parseTags(els.recipeTags.value),
+    ingredients: els.recipeIngredients.value,
+    steps: els.recipeSteps.value,
+    notes: els.recipeNotes.value,
+    coverData: els.recipeCoverData.value,
+    sourceText: existing?.sourceText || "",
+    createdAt: existing?.createdAt || new Date().toISOString()
+  });
+  recipe.updatedAt = new Date().toISOString();
+  if (!recipe.title) {
+    showToast("先填写菜名");
+    return;
+  }
+  if (existing) state.recipes = state.recipes.map((item) => (item.id === id ? recipe : item));
+  else {
+    recipe.sourceText = recipe.sourceText || els.recipeLinkInput?.value.trim() || "";
+    state.recipes.unshift(recipe);
+    clearRecipeLinkInput();
+  }
+  saveRecipes();
+  els.recipeDialog.close();
+  renderRecipes();
+  showToast("菜谱已保存");
+}
+
+function deleteCurrentRecipe() {
+  const id = els.recipeId.value;
+  if (!id) return;
+  state.recipes = state.recipes.filter((recipe) => recipe.id !== id);
+  saveRecipes();
+  els.recipeDialog.close();
+  renderRecipes();
+  showToast("菜谱已删除");
+}
+
+async function handleRecipeCoverInput(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const task = trackPhotoTask(compressImageFile(file));
+  try {
+    const coverData = await task;
+    setRecipeCoverPreview(coverData);
+    showToast("封面已添加");
+  } catch {
+    showToast("封面读取失败");
+  }
+}
+
+function removeCurrentRecipeCover() {
+  setRecipeCoverPreview("");
+  if (els.recipeCoverInput) els.recipeCoverInput.value = "";
+}
+
+function setRecipeCoverPreview(coverData) {
+  if (els.recipeCoverData) els.recipeCoverData.value = coverData || "";
+  if (els.recipeCoverPreview) els.recipeCoverPreview.classList.toggle("is-empty", !coverData);
+  if (els.recipeCoverPreviewImage) els.recipeCoverPreviewImage.src = coverData || "";
+}
+
+function exportRecipes() {
+  const payload = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    recipes: state.recipes
+  };
+  downloadTextFile(`recipes-backup-${todaySlug()}.json`, JSON.stringify(payload));
+  showToast("Recipe JSON 已下载");
+}
+
+async function importRecipes(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try {
+    const payload = JSON.parse(await file.text());
+    const incoming = Array.isArray(payload) ? payload : payload.recipes;
+    if (!Array.isArray(incoming)) throw new Error("Invalid recipe backup");
+    const existingById = new Map(state.recipes.map((recipe) => [recipe.id, recipe]));
+    const existingByUrl = new Map(state.recipes.filter((recipe) => recipe.url).map((recipe) => [recipe.url, recipe]));
+    for (const item of incoming) {
+      const recipe = normalizeRecipe({ ...item, id: item.id || createId() });
+      const existing = existingById.get(recipe.id) || (recipe.url ? existingByUrl.get(recipe.url) : null);
+      if (existing) state.recipes = state.recipes.map((current) => (current.id === existing.id ? { ...existing, ...recipe } : current));
+      else state.recipes.push(recipe);
+    }
+    saveRecipes();
+    renderRecipes();
+    showToast(`导入了 ${incoming.length} 个菜谱`);
+  } catch {
+    showToast("Recipe 导入失败");
+  } finally {
+    event.target.value = "";
+  }
+}
+
+function normalizeRecipe(recipe) {
+  return {
+    id: recipe.id || createId(),
+    title: cleanRecipeTitle(recipe.title || "") || "未命名菜谱",
+    url: String(recipe.url || "").trim(),
+    tags: parseTags(Array.isArray(recipe.tags) ? recipe.tags.join(" ") : recipe.tags),
+    ingredients: String(recipe.ingredients || "").trim(),
+    steps: String(recipe.steps || "").trim(),
+    notes: String(recipe.notes || "").trim(),
+    coverData: recipe.coverData || "",
+    sourceText: String(recipe.sourceText || "").trim(),
+    createdAt: recipe.createdAt || new Date().toISOString(),
+    updatedAt: recipe.updatedAt || recipe.createdAt || new Date().toISOString()
+  };
 }
 
 function openBackupDialog() {
