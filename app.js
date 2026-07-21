@@ -458,7 +458,7 @@ async function saveRecipeFromLinkInput() {
     coverData: existing?.coverData || preview?.coverData || "",
     sourceText: text
   });
-  showToast(existing ? "已打开已有菜谱" : "确认后保存");
+  showToast(existing ? "这个链接已经保存过，已打开已有菜谱" : "确认后保存");
 }
 
 async function fetchRecipePreview(url) {
