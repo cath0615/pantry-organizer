@@ -10,6 +10,10 @@ const LOCATIONS_KEY = "pantry-organizer-locations";
 const MEAL_PLANNER_KEY = "pantry-organizer-meal-planner";
 const RECIPES_KEY = "pantry-organizer-recipes";
 const SYNC_SETTINGS_KEY = "pantry-organizer-github-sync";
+const DEFAULT_SYNC_OWNER = "cath0615";
+const DEFAULT_SYNC_REPO = "pantry-organizer-data";
+const DEFAULT_SYNC_BRANCH = "main";
+const DEFAULT_SYNC_PATH = "pantry-data.json";
 const BACKUP_CHUNK_SIZE = 180000;
 const CHUNK_PREFIX = "PANTRY_BACKUP_PART";
 const QUANTITY_PHRASE = `(?:数量|数目|有)?\\s*[一二两三四五六七八九十百\\d]+(?:\\.\\d+)?\\s*(?:${QUANTITY_UNITS})`;
@@ -1839,10 +1843,10 @@ function loadSyncSettings() {
   } catch {
     saved = {};
   }
-  if (els.githubOwner) els.githubOwner.value = saved.owner || "cath0615";
-  if (els.githubRepo) els.githubRepo.value = saved.repo || "";
-  if (els.githubBranch) els.githubBranch.value = saved.branch || "main";
-  if (els.githubPath) els.githubPath.value = saved.path || "pantry-data.json";
+  if (els.githubOwner) els.githubOwner.value = saved.owner || DEFAULT_SYNC_OWNER;
+  if (els.githubRepo) els.githubRepo.value = saved.repo || DEFAULT_SYNC_REPO;
+  if (els.githubBranch) els.githubBranch.value = saved.branch || DEFAULT_SYNC_BRANCH;
+  if (els.githubPath) els.githubPath.value = saved.path || DEFAULT_SYNC_PATH;
   if (els.githubToken) els.githubToken.value = saved.token || "";
 }
 
@@ -1850,8 +1854,8 @@ function readSyncSettings() {
   return {
     owner: els.githubOwner?.value.trim() || "",
     repo: els.githubRepo?.value.trim() || "",
-    branch: els.githubBranch?.value.trim() || "main",
-    path: (els.githubPath?.value.trim() || "pantry-data.json").replace(/^\/+/, ""),
+    branch: els.githubBranch?.value.trim() || DEFAULT_SYNC_BRANCH,
+    path: (els.githubPath?.value.trim() || DEFAULT_SYNC_PATH).replace(/^\/+/, ""),
     token: els.githubToken?.value.trim() || ""
   };
 }
