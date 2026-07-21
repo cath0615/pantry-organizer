@@ -535,6 +535,31 @@ select:focus {
   gap: 6px;
 }
 
+.recipe-category-editor {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.recipe-category-editor label,
+.recipe-category-editor datalist,
+.recipe-category-editor input[type="hidden"],
+.recipe-selected-tags {
+  grid-column: 1 / -1;
+}
+
+.recipe-selected-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 32px;
+}
+
+.recipe-selected-tags .category-chip button {
+  display: inline-flex;
+}
+
 .pill,
 .date-pill {
   display: inline-flex;
@@ -782,6 +807,10 @@ dialog::backdrop {
   }
 
   .category-add-row {
+    grid-template-columns: 1fr;
+  }
+
+  .recipe-category-editor {
     grid-template-columns: 1fr;
   }
 

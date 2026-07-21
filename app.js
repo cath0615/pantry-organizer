@@ -100,6 +100,10 @@ const els = {
   recipeTitle: $("recipeTitle"),
   recipeUrl: $("recipeUrl"),
   recipeTags: $("recipeTags"),
+  recipeCategoryInput: $("recipeCategoryInput"),
+  recipeCategoryOptions: $("recipeCategoryOptions"),
+  addRecipeCategoryButton: $("addRecipeCategoryButton"),
+  recipeSelectedTags: $("recipeSelectedTags"),
   recipeIngredients: $("recipeIngredients"),
   recipeSteps: $("recipeSteps"),
   recipeNotes: $("recipeNotes"),
@@ -224,6 +228,13 @@ function bindEvents() {
   on(els.closeRecipeDialogButton, "click", () => els.recipeDialog.close());
   on(els.recipeCoverInput, "change", handleRecipeCoverInput);
   on(els.removeRecipeCoverButton, "click", removeCurrentRecipeCover);
+  on(els.addRecipeCategoryButton, "click", addRecipeCategoryFromDialog);
+  on(els.recipeCategoryInput, "keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    addRecipeCategoryFromDialog();
+  });
+  on(els.recipeSelectedTags, "click", removeRecipeCategoryFromDialog);
   on(els.addBlankButton, "click", () => openItemDialog());
   on(els.itemForm, "submit", handleItemSubmit);
   on(els.deleteItemButton, "click", deleteCurrentItem);
@@ -403,7 +414,7 @@ function saveRecipes() {
   localStorage.setItem(RECIPES_KEY, JSON.stringify(state.recipes));
 }
 
-function saveRecipeFromLinkInput() {
+async function saveRecipeFromLinkInput() {
   const text = els.recipeLinkInput.value.trim();
   if (!text) {
     showToast("先粘贴链接");
@@ -415,15 +426,54 @@ function saveRecipeFromLinkInput() {
     return;
   }
   const existing = state.recipes.find((recipe) => recipe.url === url);
+  let preview = null;
+  if (!existing) {
+    showToast("正在抓取封面");
+    preview = await fetchRecipePreview(url);
+  }
   openRecipeDialog({
     ...(existing || {}),
     id: existing?.id || "",
-    title: existing?.title || extractRecipeTitle(text) || "未命名菜谱",
-    url,
+    title: existing?.title || extractRecipeTitle(text) || preview?.title || "未命名菜谱",
+    url: preview?.finalUrl || url,
     tags: existing?.tags || parseTags(els.recipeTagsInput.value),
+    coverData: existing?.coverData || preview?.coverData || "",
     sourceText: text
   });
   showToast(existing ? "已打开已有菜谱" : "确认后保存");
+}
+
+async function fetchRecipePreview(url) {
+  const endpoints = getRecipePreviewEndpoints();
+  for (const endpoint of endpoints) {
+    try {
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), 30000);
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url }),
+        signal: controller.signal
+      });
+      window.clearTimeout(timer);
+      if (!response.ok) continue;
+      const data = await response.json();
+      if (data?.ok) return data;
+    } catch {
+      // The local helper is optional; GitHub Pages still works without it.
+    }
+  }
+  showToast("未连接本地抓取服务");
+  return null;
+}
+
+function getRecipePreviewEndpoints() {
+  const endpoints = [];
+  if (location.protocol === "http:" && /^(localhost|127\.0\.0\.1|::1)$/.test(location.hostname)) {
+    endpoints.push(`${location.origin}/api/xhs-preview`);
+  }
+  endpoints.push("http://127.0.0.1:5173/api/xhs-preview");
+  return [...new Set(endpoints)];
 }
 
 function clearRecipeLinkInput() {
@@ -456,6 +506,10 @@ function extractRecipeTitle(text) {
 
 function cleanRecipeTitle(value) {
   return String(value || "")
+    .replace(/^\d+\s*/, "")
+    .replace(/\s+[-|｜]\s*[^-|｜]*?(小红书|你的生活兴趣社区|$).*/, "")
+    .replace(/\s+\|\s*小红书.*/, "")
+    .replace(/\s+-\s*[^-]+$/, "")
     .replace(/^[\s:：,，.。-]+|[\s:：,，.。-]+$/g, "")
     .slice(0, 48);
 }
@@ -494,10 +548,19 @@ function refreshRecipeTagFilter() {
   }
   els.recipeTagFilter.value = tags.includes(previous) ? previous : "all";
   state.recipeTag = els.recipeTagFilter.value;
+  refreshRecipeCategoryOptions(tags);
 }
 
 function getRecipeTags() {
   return [...new Set(state.recipes.flatMap((recipe) => recipe.tags || []))].sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
+}
+
+function refreshRecipeCategoryOptions(tags = getRecipeTags()) {
+  if (!els.recipeCategoryOptions) return;
+  els.recipeCategoryOptions.replaceChildren();
+  for (const tag of tags) {
+    els.recipeCategoryOptions.append(new Option(tag, tag));
+  }
 }
 
 function renderRecipeCard(recipe) {
@@ -563,7 +626,8 @@ function openRecipeDialog(recipe = null) {
   els.recipeId.value = recipe?.id || "";
   els.recipeTitle.value = recipe?.title || "";
   els.recipeUrl.value = recipe?.url || "";
-  els.recipeTags.value = (recipe?.tags || []).join("，");
+  setRecipeDialogTags(recipe?.tags || []);
+  if (els.recipeCategoryInput) els.recipeCategoryInput.value = "";
   els.recipeIngredients.value = recipe?.ingredients || "";
   els.recipeSteps.value = recipe?.steps || "";
   els.recipeNotes.value = recipe?.notes || "";
@@ -583,7 +647,7 @@ async function handleRecipeSubmit(event) {
     id,
     title: els.recipeTitle.value,
     url: els.recipeUrl.value,
-    tags: parseTags(els.recipeTags.value),
+    tags: getRecipeDialogTags(),
     ingredients: els.recipeIngredients.value,
     steps: els.recipeSteps.value,
     notes: els.recipeNotes.value,
@@ -606,6 +670,47 @@ async function handleRecipeSubmit(event) {
   els.recipeDialog.close();
   renderRecipes();
   showToast("菜谱已保存");
+}
+
+function setRecipeDialogTags(tags) {
+  const normalized = parseTags(Array.isArray(tags) ? tags.join(" ") : tags);
+  if (els.recipeTags) els.recipeTags.value = normalized.join("，");
+  renderRecipeDialogTags(normalized);
+}
+
+function getRecipeDialogTags() {
+  return parseTags(els.recipeTags?.value || "");
+}
+
+function addRecipeCategoryFromDialog() {
+  const next = parseTags(els.recipeCategoryInput?.value || "");
+  if (!next.length) {
+    showToast("先输入分类");
+    return;
+  }
+  const tags = [...new Set([...getRecipeDialogTags(), ...next])];
+  setRecipeDialogTags(tags);
+  els.recipeCategoryInput.value = "";
+}
+
+function removeRecipeCategoryFromDialog(event) {
+  const button = event.target.closest("button[data-recipe-tag]");
+  if (!button) return;
+  const tags = getRecipeDialogTags().filter((tag) => tag !== button.dataset.recipeTag);
+  setRecipeDialogTags(tags);
+}
+
+function renderRecipeDialogTags(tags = getRecipeDialogTags()) {
+  if (!els.recipeSelectedTags) return;
+  els.recipeSelectedTags.replaceChildren();
+  for (const tag of tags) {
+    const chip = document.createElement("span");
+    chip.className = "category-chip";
+    chip.innerHTML = `<span></span><button type="button" aria-label="移除分类">×</button>`;
+    chip.querySelector("span").textContent = tag;
+    chip.querySelector("button").dataset.recipeTag = tag;
+    els.recipeSelectedTags.append(chip);
+  }
 }
 
 function deleteCurrentRecipe() {

@@ -10,7 +10,7 @@
     <title>Pantry Organizer</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=27" />
+    <link rel="stylesheet" href="./styles.css?v=28" />
   </head>
   <body>
     <div class="app-shell">
@@ -154,7 +154,12 @@
               rows="4"
               placeholder="粘贴小红书分享文案或链接"
             ></textarea>
-            <input id="recipeTagsInput" autocomplete="off" placeholder="分类，例如：甜品，鸡肉，快手菜" />
+            <input
+              id="recipeTagsInput"
+              autocomplete="off"
+              list="recipeCategoryOptions"
+              placeholder="分类，例如：甜品，鸡肉，快手菜"
+            />
             <div class="capture-actions">
               <button class="primary-button" id="saveRecipeLinkButton" type="button">编辑保存</button>
               <button class="ghost-button" id="clearRecipeLinkButton" type="button">清空</button>
@@ -273,10 +278,16 @@
           链接
           <input id="recipeUrl" type="url" autocomplete="off" />
         </label>
-        <label>
-          分类
-          <input id="recipeTags" autocomplete="off" placeholder="甜品，鸡肉，牛肉" />
-        </label>
+        <section class="recipe-category-editor" aria-label="菜谱分类">
+          <label>
+            分类
+            <input id="recipeCategoryInput" autocomplete="off" list="recipeCategoryOptions" placeholder="输入或选择分类" />
+          </label>
+          <button class="ghost-button compact" id="addRecipeCategoryButton" type="button">添加分类</button>
+          <datalist id="recipeCategoryOptions"></datalist>
+          <input type="hidden" id="recipeTags" />
+          <div class="recipe-selected-tags" id="recipeSelectedTags"></div>
+        </section>
         <section class="photo-field" aria-label="菜谱封面">
           <div class="section-title-row">
             <h3>封面</h3>
@@ -350,6 +361,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=27" type="module"></script>
+    <script src="./app.js?v=28" type="module"></script>
   </body>
 </html>
