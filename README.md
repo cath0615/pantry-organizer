@@ -20,10 +20,12 @@
 npm start
 ```
 
-然后打开 http://localhost:5173。这个本地模式会调用 `/api/xhs-preview`，复用 `/Users/josh/Documents/Codex/2026-06-26/wo/xhs-reader.js` 和对应的小红书浏览器 profile 抓取标题/封面。GitHub Pages 版本仍然可以查看、搜索、打开链接和手动编辑。
+然后打开 [http://localhost:5173](http://localhost:5173)。
+
+这个本地模式会调用 `/api/xhs-preview`，复用 `/Users/josh/Documents/Codex/2026-06-26/wo/xhs-reader.js` 和对应的小红书浏览器 profile 抓取标题/封面。GitHub Pages 版本仍然可以查看、搜索、打开链接和手动编辑。
 
 ## GitHub Pages
 
 这是纯静态应用，可以直接用 GitHub Pages 发布。发布后用手机 Safari/Chrome 打开 HTTPS 地址，再添加到主屏幕。
 
-网页地址：https://cath0615.github.io/pantry-organizer/index.html
+网页地址：[https://cath0615.github.io/pantry-organizer/index.html](https://cath0615.github.io/pantry-organizer/index.html)
