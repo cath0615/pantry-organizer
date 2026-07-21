@@ -1,4 +1,4 @@
-const CACHE_NAME = "pantry-organizer-v32";
+const CACHE_NAME = "pantry-organizer-v33";
 const ASSETS = [
   "./",
   "./index.html",

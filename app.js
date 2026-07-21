@@ -14,6 +14,12 @@ const DEFAULT_SYNC_OWNER = "cath0615";
 const DEFAULT_SYNC_REPO = "pantry-organizer-data";
 const DEFAULT_SYNC_BRANCH = "main";
 const DEFAULT_SYNC_PATH = "pantry-data.json";
+const SYNC_TARGETS = {
+  all: { label: "全部", file: null },
+  pantry: { label: "库存", file: "pantry-items.json" },
+  meal: { label: "Meal Plan", file: "meal-plan.json" },
+  recipes: { label: "Recipes", file: "recipes-data.json" }
+};
 const BACKUP_CHUNK_SIZE = 180000;
 const CHUNK_PREFIX = "PANTRY_BACKUP_PART";
 const QUANTITY_PHRASE = `(?:数量|数目|有)?\\s*[一二两三四五六七八九十百\\d]+(?:\\.\\d+)?\\s*(?:${QUANTITY_UNITS})`;
@@ -159,6 +165,12 @@ const els = {
   saveSyncSettingsButton: $("saveSyncSettingsButton"),
   syncUploadButton: $("syncUploadButton"),
   syncDownloadButton: $("syncDownloadButton"),
+  syncUploadPantryButton: $("syncUploadPantryButton"),
+  syncDownloadPantryButton: $("syncDownloadPantryButton"),
+  syncUploadMealButton: $("syncUploadMealButton"),
+  syncDownloadMealButton: $("syncDownloadMealButton"),
+  syncUploadRecipesButton: $("syncUploadRecipesButton"),
+  syncDownloadRecipesButton: $("syncDownloadRecipesButton"),
   syncStatus: $("syncStatus"),
   categoryNameInput: $("categoryNameInput"),
   addCategoryButton: $("addCategoryButton"),
@@ -272,8 +284,14 @@ function bindEvents() {
   on(els.importTextButton, "click", importJsonFromTextArea);
   on(els.importFileInput, "change", importJson);
   on(els.saveSyncSettingsButton, "click", saveSyncSettingsFromForm);
-  on(els.syncUploadButton, "click", uploadGithubSync);
-  on(els.syncDownloadButton, "click", downloadGithubSync);
+  on(els.syncUploadButton, "click", () => uploadGithubSync("all"));
+  on(els.syncDownloadButton, "click", () => downloadGithubSync("all"));
+  on(els.syncUploadPantryButton, "click", () => uploadGithubSync("pantry"));
+  on(els.syncDownloadPantryButton, "click", () => downloadGithubSync("pantry"));
+  on(els.syncUploadMealButton, "click", () => uploadGithubSync("meal"));
+  on(els.syncDownloadMealButton, "click", () => downloadGithubSync("meal"));
+  on(els.syncUploadRecipesButton, "click", () => uploadGithubSync("recipes"));
+  on(els.syncDownloadRecipesButton, "click", () => downloadGithubSync("recipes"));
   on(els.voiceButton, "click", toggleSpeech);
   on(els.addCategoryButton, "click", addCategoryFromInput);
   on(els.categoryNameInput, "keydown", (event) => {
@@ -1737,9 +1755,26 @@ async function importBackupText(text) {
 }
 
 function buildBackupPayload() {
-  return {
+  return buildSyncPayload("all");
+}
+
+function buildSyncPayload(target = "all") {
+  const base = {
     version: 2,
-    exportedAt: new Date().toISOString(),
+    syncTarget: target,
+    exportedAt: new Date().toISOString()
+  };
+  if (target === "pantry") {
+    return { ...base, categories: state.categories, locations: state.locations, items: state.items };
+  }
+  if (target === "meal") {
+    return { ...base, mealPlanner: state.mealPlanner };
+  }
+  if (target === "recipes") {
+    return { ...base, recipes: state.recipes };
+  }
+  return {
+    ...base,
     categories: state.categories,
     locations: state.locations,
     mealPlanner: state.mealPlanner,
@@ -1752,6 +1787,7 @@ async function applyBackupPayload(payload, options = {}) {
   const requireItems = options.requireItems ?? false;
   const incomingItems = Array.isArray(payload) ? payload : payload.items;
   const incomingRecipes = Array.isArray(payload?.recipes) ? payload.recipes : [];
+  let importedMealPlanner = false;
   if (requireItems && !Array.isArray(incomingItems)) throw new Error("Invalid backup");
   if (Array.isArray(payload.categories)) {
     state.categories = orderCategories([...state.categories, ...payload.categories]);
@@ -1784,13 +1820,14 @@ async function applyBackupPayload(payload, options = {}) {
     };
     localStorage.setItem(MEAL_PLANNER_KEY, JSON.stringify(state.mealPlanner));
     loadMealPlanner();
+    importedMealPlanner = true;
   }
   refreshCategoryControls();
   refreshLocationControls();
   renderCategoryList();
   render();
   renderRecipes();
-  return { items: Array.isArray(incomingItems) ? incomingItems.length : 0, recipes: incomingRecipes.length };
+  return { items: Array.isArray(incomingItems) ? incomingItems.length : 0, recipes: incomingRecipes.length, mealPlanner: importedMealPlanner };
 }
 
 async function copyBackupText() {
@@ -1872,17 +1909,18 @@ function saveSyncSettingsFromForm() {
   showToast("同步设置已保存");
 }
 
-async function uploadGithubSync() {
-  const settings = readSyncSettings();
+async function uploadGithubSync(target = "all") {
+  const settings = syncSettingsForTarget(readSyncSettings(), target);
   if (!validateSyncSettings(settings)) return;
-  saveSyncSettings(settings);
+  saveSyncSettings(readSyncSettings());
   setSyncButtonsDisabled(true);
-  updateSyncStatus("正在上传当前数据...");
+  const label = syncTargetLabel(target);
+  updateSyncStatus(`正在上传${label}...`);
   try {
     const existing = await fetchGithubContent(settings, { allowMissing: true });
-    const content = JSON.stringify(buildBackupPayload());
+    const content = JSON.stringify(buildSyncPayload(target));
     const body = {
-      message: `Update pantry sync ${new Date().toISOString()}`,
+      message: `Update ${target} sync ${new Date().toISOString()}`,
       content: encodeBase64Utf8(content),
       branch: settings.branch
     };
@@ -1893,8 +1931,8 @@ async function uploadGithubSync() {
       body: JSON.stringify(body)
     });
     if (!response.ok) throw new Error(await githubErrorMessage(response));
-    updateSyncStatus(`已上传到 ${settings.owner}/${settings.repo}/${settings.path}`);
-    showToast("已上传到 GitHub");
+    updateSyncStatus(`已上传${label}到 ${settings.path}`);
+    showToast(`已上传${label}`);
   } catch (error) {
     updateSyncStatus(error.message || "上传失败");
     showToast("GitHub 上传失败");
@@ -1903,18 +1941,19 @@ async function uploadGithubSync() {
   }
 }
 
-async function downloadGithubSync() {
-  const settings = readSyncSettings();
+async function downloadGithubSync(target = "all") {
+  const settings = syncSettingsForTarget(readSyncSettings(), target);
   if (!validateSyncSettings(settings)) return;
-  saveSyncSettings(settings);
+  saveSyncSettings(readSyncSettings());
   setSyncButtonsDisabled(true);
-  updateSyncStatus("正在从 GitHub 下载...");
+  const label = syncTargetLabel(target);
+  updateSyncStatus(`正在同步${label}...`);
   try {
     const remote = await fetchGithubContent(settings);
     const payload = JSON.parse(decodeBase64Utf8(remote.content || ""));
     const result = await applyBackupPayload(payload, { requireItems: false });
-    updateSyncStatus(`已同步：${result.items} 个库存，${result.recipes} 个菜谱。`);
-    showToast("GitHub 同步完成");
+    updateSyncStatus(`${label}同步完成：${formatSyncResult(result)}。`);
+    showToast(`${label}同步完成`);
   } catch (error) {
     updateSyncStatus(error.message || "同步失败");
     showToast("GitHub 同步失败");
@@ -1934,6 +1973,25 @@ function validateSyncSettings(settings) {
     return false;
   }
   return true;
+}
+
+function syncSettingsForTarget(settings, target) {
+  const file = SYNC_TARGETS[target]?.file;
+  if (!file) return settings;
+  return { ...settings, path: pathBesideSyncFile(settings.path, file) };
+}
+
+function pathBesideSyncFile(basePath, filename) {
+  const parts = String(basePath || DEFAULT_SYNC_PATH)
+    .replace(/^\/+/, "")
+    .split("/")
+    .filter(Boolean);
+  parts.pop();
+  return [...parts, filename].join("/") || filename;
+}
+
+function syncTargetLabel(target) {
+  return SYNC_TARGETS[target]?.label || SYNC_TARGETS.all.label;
 }
 
 async function fetchGithubContent(settings, options = {}) {
@@ -1994,7 +2052,17 @@ function decodeBase64Utf8(value) {
 }
 
 function setSyncButtonsDisabled(disabled) {
-  for (const button of [els.saveSyncSettingsButton, els.syncUploadButton, els.syncDownloadButton]) {
+  for (const button of [
+    els.saveSyncSettingsButton,
+    els.syncUploadButton,
+    els.syncDownloadButton,
+    els.syncUploadPantryButton,
+    els.syncDownloadPantryButton,
+    els.syncUploadMealButton,
+    els.syncDownloadMealButton,
+    els.syncUploadRecipesButton,
+    els.syncDownloadRecipesButton
+  ]) {
     if (button) button.disabled = disabled;
   }
 }
@@ -2008,6 +2076,14 @@ function formatImportResult(result) {
   if (result.items) parts.push(`${result.items} 个库存`);
   if (result.recipes) parts.push(`${result.recipes} 个菜谱`);
   return parts.length ? `导入了 ${parts.join("，")}` : "没有发现可导入的数据";
+}
+
+function formatSyncResult(result) {
+  const parts = [];
+  if (result.items) parts.push(`${result.items} 个库存`);
+  if (result.recipes) parts.push(`${result.recipes} 个菜谱`);
+  if (result.mealPlanner) parts.push("Meal Plan");
+  return parts.length ? parts.join("，") : "没有新数据";
 }
 
 function downloadTextFile(filename, content) {

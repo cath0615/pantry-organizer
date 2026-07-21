@@ -10,7 +10,7 @@
     <title>Pantry Organizer</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=32" />
+    <link rel="stylesheet" href="./styles.css?v=33" />
   </head>
   <body>
     <div class="app-shell">
@@ -365,10 +365,18 @@
           </label>
           <div class="sync-actions">
             <button class="ghost-button compact" id="saveSyncSettingsButton" type="button">保存设置</button>
-            <button class="primary-button compact" id="syncUploadButton" type="button">上传到 GitHub</button>
-            <button class="ghost-button compact" id="syncDownloadButton" type="button">从 GitHub 同步</button>
+            <button class="primary-button compact" id="syncUploadButton" type="button">上传全部</button>
+            <button class="ghost-button compact" id="syncDownloadButton" type="button">同步全部</button>
           </div>
-          <p class="backup-status" id="syncStatus">建议用单独的 private repo 存数据；电脑上传后，手机填同样设置再同步即可看到。</p>
+          <div class="sync-actions secondary">
+            <button class="ghost-button compact" id="syncUploadPantryButton" type="button">上传库存</button>
+            <button class="ghost-button compact" id="syncDownloadPantryButton" type="button">同步库存</button>
+            <button class="ghost-button compact" id="syncUploadMealButton" type="button">上传 Meal</button>
+            <button class="ghost-button compact" id="syncDownloadMealButton" type="button">同步 Meal</button>
+            <button class="ghost-button compact" id="syncUploadRecipesButton" type="button">上传 Recipes</button>
+            <button class="ghost-button compact" id="syncDownloadRecipesButton" type="button">同步 Recipes</button>
+          </div>
+          <p class="backup-status" id="syncStatus">单独同步会更快；全部同步仍会包含库存、Meal Plan 和 Recipes。</p>
         </section>
         <section class="category-manager" aria-labelledby="categoryManagerTitle">
           <h3 id="categoryManagerTitle">分类管理</h3>
@@ -386,6 +394,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=32" type="module"></script>
+    <script src="./app.js?v=33" type="module"></script>
   </body>
 </html>
