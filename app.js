@@ -1314,7 +1314,8 @@ function renderDrafts() {
       </section>
       <div class="two-col">
         <label>名称<input data-field="name" /></label>
-        <label>分类<select data-field="category"></select></label>
+        <label>分类<input data-field="category" list="draftCategoryOptions-${index}" /></label>
+        <datalist id="draftCategoryOptions-${index}"></datalist>
       </div>
       <div class="two-col">
         <label>过期日期<input data-field="expireDate" type="date" /></label>
@@ -1350,8 +1351,8 @@ function renderDrafts() {
       photoInput.value = "";
       updateDraftPhotoPreview(card, "");
     });
-    const categorySelect = card.querySelector('select[data-field="category"]');
-    categorySelect.append(...state.categories.map((category) => new Option(category, category)));
+    const categoryOptions = card.querySelector(`#draftCategoryOptions-${index}`);
+    categoryOptions.append(...state.categories.map((category) => new Option(category, category)));
     const locationSelect = card.querySelector('select[data-field="location"]');
     locationSelect.append(new Option("未设置", ""));
     for (const location of getLocationOptions()) {
