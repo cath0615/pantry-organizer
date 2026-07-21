@@ -25,3 +25,5 @@ npm start
 ## GitHub Pages
 
 这是纯静态应用，可以直接用 GitHub Pages 发布。发布后用手机 Safari/Chrome 打开 HTTPS 地址，再添加到主屏幕。
+
+网页地址：https://cath0615.github.io/pantry-organizer/index.html
