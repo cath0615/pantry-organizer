@@ -80,7 +80,6 @@ const els = {
   clearMealPlanButton: $("clearMealPlanButton"),
   clearMealNotesButton: $("clearMealNotesButton"),
   recipeLinkInput: $("recipeLinkInput"),
-  recipeTagsInput: $("recipeTagsInput"),
   saveRecipeLinkButton: $("saveRecipeLinkButton"),
   clearRecipeLinkButton: $("clearRecipeLinkButton"),
   addRecipeButton: $("addRecipeButton"),
@@ -454,7 +453,7 @@ async function saveRecipeFromLinkInput() {
     id: existing?.id || "",
     title: existing?.title || extractRecipeTitle(text) || preview?.title || "未命名菜谱",
     url: preview?.finalUrl || url,
-    tags: existing?.tags || parseTags(els.recipeTagsInput.value),
+    tags: existing?.tags || [],
     coverData: existing?.coverData || preview?.coverData || "",
     sourceText: text
   });
@@ -481,7 +480,7 @@ async function fetchRecipePreview(url) {
       // The local helper is optional; GitHub Pages still works without it.
     }
   }
-  showToast("未连接本地抓取服务");
+  showToast("GitHub Pages 不能自动抓封面，可在弹窗里上传");
   return null;
 }
 
@@ -496,7 +495,6 @@ function getRecipePreviewEndpoints() {
 
 function clearRecipeLinkInput() {
   if (els.recipeLinkInput) els.recipeLinkInput.value = "";
-  if (els.recipeTagsInput) els.recipeTagsInput.value = "";
 }
 
 function extractRecipeUrl(text) {
