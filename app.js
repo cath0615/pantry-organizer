@@ -52,6 +52,7 @@ const state = {
   recipes: [],
   recipeQuery: "",
   recipeTag: "all",
+  activeTab: "pantry",
   mealPlanner: {
     meals: {},
     ideas: "",
@@ -82,7 +83,6 @@ const els = {
   categoryFilter: $("categoryFilter"),
   locationFilter: $("locationFilter"),
   sortSelect: $("sortSelect"),
-  manageCategoriesButton: $("manageCategoriesButton"),
   mealDayTabs: $("mealDayTabs"),
   mealGrid: $("mealGrid"),
   mealIdeasNote: $("mealIdeasNote"),
@@ -136,6 +136,7 @@ const els = {
   removePhotoButton: $("removePhotoButton"),
   itemName: $("itemName"),
   itemCategory: $("itemCategory"),
+  itemCategoryOptions: $("itemCategoryOptions"),
   itemExpireDate: $("itemExpireDate"),
   itemQuantity: $("itemQuantity"),
   itemUnit: $("itemUnit"),
@@ -147,35 +148,20 @@ const els = {
   backupButton: $("backupButton"),
   backupDialog: $("backupDialog"),
   exportJsonButton: $("exportJsonButton"),
-  exportCsvButton: $("exportCsvButton"),
-  copyBackupButton: $("copyBackupButton"),
-  copyChunkButton: $("copyChunkButton"),
-  prevChunkButton: $("prevChunkButton"),
-  nextChunkButton: $("nextChunkButton"),
   downloadBackupButton: $("downloadBackupButton"),
   importTextButton: $("importTextButton"),
-  backupOutput: $("backupOutput"),
   backupStatus: $("backupStatus"),
-  chunkStatus: $("chunkStatus"),
   githubOwner: $("githubOwner"),
   githubRepo: $("githubRepo"),
   githubBranch: $("githubBranch"),
   githubPath: $("githubPath"),
   githubToken: $("githubToken"),
   saveSyncSettingsButton: $("saveSyncSettingsButton"),
+  syncUploadCurrentButton: $("syncUploadCurrentButton"),
+  syncDownloadCurrentButton: $("syncDownloadCurrentButton"),
   syncUploadButton: $("syncUploadButton"),
   syncDownloadButton: $("syncDownloadButton"),
-  syncUploadPantryButton: $("syncUploadPantryButton"),
-  syncDownloadPantryButton: $("syncDownloadPantryButton"),
-  syncUploadMealButton: $("syncUploadMealButton"),
-  syncDownloadMealButton: $("syncDownloadMealButton"),
-  syncUploadRecipesButton: $("syncUploadRecipesButton"),
-  syncDownloadRecipesButton: $("syncDownloadRecipesButton"),
   syncStatus: $("syncStatus"),
-  categoryNameInput: $("categoryNameInput"),
-  addCategoryButton: $("addCategoryButton"),
-  categoryList: $("categoryList"),
-  importFileInput: $("importFileInput"),
   toast: $("toast")
 };
 
@@ -197,7 +183,6 @@ async function init() {
   syncLocationsFromItems();
   refreshCategoryControls();
   refreshLocationControls();
-  renderCategoryList();
   render();
   renderRecipes();
 }
@@ -233,7 +218,6 @@ function bindEvents() {
     state.sort = els.sortSelect.value;
     render();
   });
-  on(els.manageCategoriesButton, "click", () => openCategoryManager());
   on(els.mealDayTabs, "click", switchMealDay);
   on(els.mealGrid, "input", saveMealPlanner);
   on(els.mealIdeasNote, "input", saveMealPlanner);
@@ -275,37 +259,21 @@ function bindEvents() {
     openBackupDialog();
   });
   on(els.exportJsonButton, "click", exportJson);
-  on(els.exportCsvButton, "click", exportCsv);
-  on(els.copyBackupButton, "click", copyBackupText);
-  on(els.copyChunkButton, "click", copyCurrentChunk);
-  on(els.prevChunkButton, "click", () => showBackupChunk(state.activeChunkIndex - 1));
-  on(els.nextChunkButton, "click", () => showBackupChunk(state.activeChunkIndex + 1));
   on(els.downloadBackupButton, "click", downloadBackupText);
   on(els.importTextButton, "click", importJsonFromTextArea);
-  on(els.importFileInput, "change", importJson);
   on(els.saveSyncSettingsButton, "click", saveSyncSettingsFromForm);
+  on(els.syncUploadCurrentButton, "click", () => uploadGithubSync(currentSyncTarget()));
+  on(els.syncDownloadCurrentButton, "click", () => downloadGithubSync(currentSyncTarget()));
   on(els.syncUploadButton, "click", () => uploadGithubSync("all"));
   on(els.syncDownloadButton, "click", () => downloadGithubSync("all"));
-  on(els.syncUploadPantryButton, "click", () => uploadGithubSync("pantry"));
-  on(els.syncDownloadPantryButton, "click", () => downloadGithubSync("pantry"));
-  on(els.syncUploadMealButton, "click", () => uploadGithubSync("meal"));
-  on(els.syncDownloadMealButton, "click", () => downloadGithubSync("meal"));
-  on(els.syncUploadRecipesButton, "click", () => uploadGithubSync("recipes"));
-  on(els.syncDownloadRecipesButton, "click", () => downloadGithubSync("recipes"));
   on(els.voiceButton, "click", toggleSpeech);
-  on(els.addCategoryButton, "click", addCategoryFromInput);
-  on(els.categoryNameInput, "keydown", (event) => {
-    if (event.key !== "Enter") return;
-    event.preventDefault();
-    addCategoryFromInput();
-  });
-  on(els.categoryList, "click", deleteCategoryFromList);
 }
 
 function switchTab(event) {
   const button = event.target.closest("button[data-tab]");
   if (!button) return;
   const activeTab = button.dataset.tab;
+  state.activeTab = activeTab;
   for (const tabButton of els.appTabs.querySelectorAll("button[data-tab]")) {
     const isActive = tabButton.dataset.tab === activeTab;
     tabButton.classList.toggle("is-active", isActive);
@@ -314,6 +282,7 @@ function switchTab(event) {
   for (const panel of document.querySelectorAll("[data-tab-panel]")) {
     panel.classList.toggle("is-active", panel.dataset.tabPanel === activeTab);
   }
+  updateCurrentSyncHint();
 }
 
 function renderMealPlanner() {
@@ -844,13 +813,8 @@ function normalizeRecipe(recipe) {
 }
 
 function openBackupDialog() {
-  renderCategoryList();
+  updateCurrentSyncHint();
   els.backupDialog.showModal();
-}
-
-function openCategoryManager() {
-  openBackupDialog();
-  window.setTimeout(() => els.categoryNameInput?.focus(), 80);
 }
 
 async function initStorage() {
@@ -1149,9 +1113,9 @@ function refreshCategoryControls() {
   els.categoryFilter.value = state.categories.includes(previousFilter) ? previousFilter : "all";
   state.category = els.categoryFilter.value;
 
-  els.itemCategory.replaceChildren();
+  if (els.itemCategoryOptions) els.itemCategoryOptions.replaceChildren();
   for (const category of state.categories) {
-    els.itemCategory.append(new Option(category, category));
+    if (els.itemCategoryOptions) els.itemCategoryOptions.append(new Option(category, category));
   }
   els.itemCategory.value = state.categories.includes(previousItemCategory) ? previousItemCategory : "其他";
 }
@@ -1236,64 +1200,12 @@ function orderLocations(locations) {
   });
 }
 
-function renderCategoryList() {
-  els.categoryList.replaceChildren();
-  for (const category of state.categories) {
-    const chip = document.createElement("span");
-    const isDefault = DEFAULT_CATEGORIES.includes(category);
-    chip.className = `category-chip${isDefault ? " is-default" : ""}`;
-    chip.innerHTML = `<span></span><button type="button" aria-label="删除分类">×</button>`;
-    chip.querySelector("span").textContent = category;
-    chip.querySelector("button").dataset.category = category;
-    els.categoryList.append(chip);
-  }
-}
-
-function addCategoryFromInput() {
-  const category = normalizeCategoryName(els.categoryNameInput.value);
-  if (!category) {
-    showToast("先输入分类名");
-    return;
-  }
-  if (state.categories.includes(category)) {
-    showToast("这个分类已经有了");
-    return;
-  }
-  state.categories = orderCategories([...state.categories, category]);
-  saveCategories();
-  refreshCategoryControls();
-  renderCategoryList();
-  els.categoryNameInput.value = "";
-  showToast("已添加分类");
-}
-
-function deleteCategoryFromList(event) {
-  const button = event.target.closest("button[data-category]");
-  if (!button) return;
-  const category = button.dataset.category;
-  if (DEFAULT_CATEGORIES.includes(category)) {
-    showToast("默认分类会保留");
-    return;
-  }
-  if (state.items.some((item) => item.category === category)) {
-    showToast("这个分类还在使用中");
-    return;
-  }
-  state.categories = state.categories.filter((existing) => existing !== category);
-  saveCategories();
-  refreshCategoryControls();
-  renderCategoryList();
-  render();
-  showToast("已删除分类");
-}
-
 function ensureCategory(value) {
   const category = normalizeCategoryName(value) || "其他";
   if (!state.categories.includes(category)) {
     state.categories = orderCategories([...state.categories, category]);
     saveCategories();
     refreshCategoryControls();
-    renderCategoryList();
   }
   return category;
 }
@@ -1673,28 +1585,14 @@ function exportJson() {
   const content = JSON.stringify(payload);
   state.fullBackupText = content;
   state.backupChunks = makeBackupChunks(content);
-  showBackupChunk(0);
   updateBackupStatus(content, true);
-  showToast(state.backupChunks.length > 1 ? "分段 JSON 已生成" : "JSON 已生成");
-}
-
-function exportCsv() {
-  const header = ["name", "category", "expireDate", "quantity", "unit", "location", "opened", "notes"];
-  const rows = state.items.map((item) => header.map((key) => csvCell(item[key])).join(","));
-  const content = [header.join(","), ...rows].join("\n");
-  state.fullBackupText = content;
-  state.backupChunks = [];
-  state.activeChunkIndex = 0;
-  els.backupOutput.value = content;
-  updateBackupStatus(content, false);
-  updateChunkStatus("CSV 不包含图片，不需要分段。");
-  showToast("CSV 已生成，可以复制");
+  showToast("JSON 已生成，可以下载");
 }
 
 function updateBackupStatus(content, includesPhotos) {
   const photoCount = state.items.filter((item) => item.photoData).length;
   const size = formatBytes(new Blob([content]).size);
-  const photoText = includesPhotos ? `包含 ${photoCount} 张图片` : "CSV 不包含图片";
+  const photoText = includesPhotos ? `包含 ${photoCount} 张图片` : "不包含图片";
   if (els.backupStatus) {
     els.backupStatus.textContent = `${state.items.length} 个物品，${photoText}，备份大小 ${size}`;
   }
@@ -1712,37 +1610,11 @@ function makeBackupChunks(content) {
   return chunks;
 }
 
-function showBackupChunk(index) {
-  if (!state.backupChunks.length) return;
-  state.activeChunkIndex = Math.max(0, Math.min(index, state.backupChunks.length - 1));
-  els.backupOutput.value = state.backupChunks[state.activeChunkIndex];
-  if (state.backupChunks.length === 1) {
-    updateChunkStatus("备份较小，可以直接复制或下载。");
-    return;
-  }
-  updateChunkStatus(`正在显示第 ${state.activeChunkIndex + 1}/${state.backupChunks.length} 段。请逐段复制保存。`);
-}
-
-function updateChunkStatus(message) {
-  if (els.chunkStatus) els.chunkStatus.textContent = message;
-}
-
-async function importJson(event) {
-  const file = event.target.files?.[0];
-  if (!file) return;
-  try {
-    const text = await file.text();
-    await importBackupText(text);
-  } catch {
-    showToast("导入失败");
-  } finally {
-    event.target.value = "";
-  }
-}
-
 async function importJsonFromTextArea() {
+  const text = window.prompt("粘贴 JSON 备份内容");
+  if (!text?.trim()) return;
   try {
-    await importBackupText(els.backupOutput.value);
+    await importBackupText(text);
   } catch {
     showToast("导入失败");
   }
@@ -1793,7 +1665,6 @@ async function applyBackupPayload(payload, options = {}) {
     state.categories = orderCategories([...state.categories, ...payload.categories]);
     saveCategories();
     refreshCategoryControls();
-    renderCategoryList();
   }
   if (Array.isArray(payload.locations)) {
     state.locations = orderLocations([...state.locations, ...payload.locations]);
@@ -1824,52 +1695,18 @@ async function applyBackupPayload(payload, options = {}) {
   }
   refreshCategoryControls();
   refreshLocationControls();
-  renderCategoryList();
   render();
   renderRecipes();
   return { items: Array.isArray(incomingItems) ? incomingItems.length : 0, recipes: incomingRecipes.length, mealPlanner: importedMealPlanner };
 }
 
-async function copyBackupText() {
-  const text = state.backupChunks.length > 1 ? els.backupOutput.value.trim() : (state.fullBackupText || els.backupOutput.value).trim();
-  if (!text) {
-    showToast("先生成 JSON");
-    return;
-  }
-  try {
-    await navigator.clipboard.writeText(text);
-    showToast("已复制");
-  } catch {
-    els.backupOutput.focus();
-    els.backupOutput.select();
-    showToast("已选中文本");
-  }
-}
-
-async function copyCurrentChunk() {
-  const text = els.backupOutput.value.trim();
-  if (!text) {
-    showToast("先生成 JSON");
-    return;
-  }
-  try {
-    await navigator.clipboard.writeText(text);
-    showToast(state.backupChunks.length > 1 ? `已复制第 ${state.activeChunkIndex + 1} 段` : "已复制");
-  } catch {
-    els.backupOutput.focus();
-    els.backupOutput.select();
-    showToast("已选中当前段");
-  }
-}
-
 function downloadBackupText() {
-  const text = (state.fullBackupText || els.backupOutput.value).trim();
+  const text = (state.fullBackupText || "").trim();
   if (!text) {
     showToast("先生成 JSON");
     return;
   }
-  const isJson = text.startsWith("{") || text.startsWith("[");
-  const filename = isJson ? `pantry-backup-${todaySlug()}.txt` : `pantry-backup-${todaySlug()}.csv`;
+  const filename = `pantry-backup-${todaySlug()}.json`;
   downloadTextFile(filename, text);
 }
 
@@ -1975,6 +1812,12 @@ function validateSyncSettings(settings) {
   return true;
 }
 
+function currentSyncTarget() {
+  if (state.activeTab === "meal") return "meal";
+  if (state.activeTab === "recipes") return "recipes";
+  return "pantry";
+}
+
 function syncSettingsForTarget(settings, target) {
   const file = SYNC_TARGETS[target]?.file;
   if (!file) return settings;
@@ -1992,6 +1835,11 @@ function pathBesideSyncFile(basePath, filename) {
 
 function syncTargetLabel(target) {
   return SYNC_TARGETS[target]?.label || SYNC_TARGETS.all.label;
+}
+
+function updateCurrentSyncHint() {
+  const label = syncTargetLabel(currentSyncTarget());
+  updateSyncStatus(`当前 tab 是 ${label}。可以只上传/同步当前，也可以上传/同步全部。`);
 }
 
 async function fetchGithubContent(settings, options = {}) {
@@ -2054,14 +1902,10 @@ function decodeBase64Utf8(value) {
 function setSyncButtonsDisabled(disabled) {
   for (const button of [
     els.saveSyncSettingsButton,
+    els.syncUploadCurrentButton,
+    els.syncDownloadCurrentButton,
     els.syncUploadButton,
-    els.syncDownloadButton,
-    els.syncUploadPantryButton,
-    els.syncDownloadPantryButton,
-    els.syncUploadMealButton,
-    els.syncDownloadMealButton,
-    els.syncUploadRecipesButton,
-    els.syncDownloadRecipesButton
+    els.syncDownloadButton
   ]) {
     if (button) button.disabled = disabled;
   }
@@ -2075,6 +1919,7 @@ function formatImportResult(result) {
   const parts = [];
   if (result.items) parts.push(`${result.items} 个库存`);
   if (result.recipes) parts.push(`${result.recipes} 个菜谱`);
+  if (result.mealPlanner) parts.push("Meal Plan");
   return parts.length ? `导入了 ${parts.join("，")}` : "没有发现可导入的数据";
 }
 

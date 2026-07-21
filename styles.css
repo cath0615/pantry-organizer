@@ -747,25 +747,6 @@ dialog::backdrop {
   line-height: 1.35;
 }
 
-.backup-output-label textarea {
-  min-height: 136px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.82rem;
-}
-
-.category-manager {
-  display: grid;
-  gap: 10px;
-  border-top: 1px solid var(--line);
-  padding-top: 12px;
-}
-
-.category-add-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-}
-
 .category-list {
   display: flex;
   flex-wrap: wrap;
@@ -834,10 +815,6 @@ dialog::backdrop {
   .recipe-backup-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
-  }
-
-  .category-add-row {
-    grid-template-columns: 1fr;
   }
 
   .recipe-category-editor {

@@ -10,7 +10,7 @@
     <title>Pantry Organizer</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=33" />
+    <link rel="stylesheet" href="./styles.css?v=34" />
   </head>
   <body>
     <div class="app-shell">
@@ -91,7 +91,6 @@
               <option value="nameAsc">名称 A-Z</option>
               <option value="updatedDesc">最近更新</option>
             </select>
-            <button class="ghost-button full-width" id="manageCategoriesButton" type="button">管理分类</button>
           </section>
 
           <section class="summary-grid" aria-label="概览">
@@ -220,7 +219,8 @@
         <div class="two-col">
           <label>
             分类
-            <select id="itemCategory"></select>
+            <input id="itemCategory" autocomplete="off" list="itemCategoryOptions" placeholder="输入或选择分类" />
+            <datalist id="itemCategoryOptions"></datalist>
           </label>
           <label>
             过期日期
@@ -325,20 +325,10 @@
         </div>
         <div class="backup-actions">
           <button class="primary-button" id="exportJsonButton" type="button">生成 JSON</button>
-          <button class="ghost-button" id="exportCsvButton" type="button">生成 CSV</button>
-          <button class="ghost-button" id="copyBackupButton" type="button">复制内容</button>
-          <button class="ghost-button" id="copyChunkButton" type="button">复制当前段</button>
-          <button class="ghost-button" id="prevChunkButton" type="button">上一段</button>
-          <button class="ghost-button" id="nextChunkButton" type="button">下一段</button>
           <button class="ghost-button" id="downloadBackupButton" type="button">下载备份</button>
           <button class="ghost-button" id="importTextButton" type="button">从文本导入</button>
-          <label class="file-button">
-            从文件导入
-            <input id="importFileInput" type="file" accept="application/json,text/plain,.json,.txt" />
-          </label>
         </div>
-        <p class="backup-status" id="backupStatus">JSON 备份会包含图片；CSV 不包含图片。</p>
-        <p class="backup-status" id="chunkStatus">照片多时可以逐段复制；导入时把所有分段文本粘到下面。</p>
+        <p class="backup-status" id="backupStatus">JSON 备份会包含图片，主要作为 GitHub Sync 之外的 fallback。</p>
         <section class="sync-panel" aria-labelledby="syncTitle">
           <h3 id="syncTitle">GitHub Sync</h3>
           <div class="sync-grid">
@@ -365,35 +355,17 @@
           </label>
           <div class="sync-actions">
             <button class="ghost-button compact" id="saveSyncSettingsButton" type="button">保存设置</button>
-            <button class="primary-button compact" id="syncUploadButton" type="button">上传全部</button>
+            <button class="primary-button compact" id="syncUploadCurrentButton" type="button">上传当前</button>
+            <button class="ghost-button compact" id="syncDownloadCurrentButton" type="button">同步当前</button>
+            <button class="ghost-button compact" id="syncUploadButton" type="button">上传全部</button>
             <button class="ghost-button compact" id="syncDownloadButton" type="button">同步全部</button>
-          </div>
-          <div class="sync-actions secondary">
-            <button class="ghost-button compact" id="syncUploadPantryButton" type="button">上传库存</button>
-            <button class="ghost-button compact" id="syncDownloadPantryButton" type="button">同步库存</button>
-            <button class="ghost-button compact" id="syncUploadMealButton" type="button">上传 Meal</button>
-            <button class="ghost-button compact" id="syncDownloadMealButton" type="button">同步 Meal</button>
-            <button class="ghost-button compact" id="syncUploadRecipesButton" type="button">上传 Recipes</button>
-            <button class="ghost-button compact" id="syncDownloadRecipesButton" type="button">同步 Recipes</button>
           </div>
           <p class="backup-status" id="syncStatus">单独同步会更快；全部同步仍会包含库存、Meal Plan 和 Recipes。</p>
         </section>
-        <section class="category-manager" aria-labelledby="categoryManagerTitle">
-          <h3 id="categoryManagerTitle">分类管理</h3>
-          <div class="category-add-row">
-            <input id="categoryNameInput" autocomplete="off" placeholder="新分类，例如：早餐" />
-            <button class="ghost-button" id="addCategoryButton" type="button">添加</button>
-          </div>
-          <div class="category-list" id="categoryList"></div>
-        </section>
-        <label class="backup-output-label">
-          备份 / 导入内容
-          <textarea id="backupOutput" rows="6" placeholder="点“生成 JSON”后复制这里的内容；导入时也可以把 JSON 粘贴到这里"></textarea>
-        </label>
       </form>
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=33" type="module"></script>
+    <script src="./app.js?v=34" type="module"></script>
   </body>
 </html>
