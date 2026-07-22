@@ -361,14 +361,7 @@ function switchMealDay(event) {
   const button = event.target.closest("button[data-day]");
   if (!button) return;
   state.activeMealDay = button.dataset.day;
-  for (const tabButton of els.mealDayTabs.querySelectorAll("button[data-day]")) {
-    const isActive = tabButton.dataset.day === state.activeMealDay;
-    tabButton.classList.toggle("is-active", isActive);
-    tabButton.setAttribute("aria-selected", String(isActive));
-  }
-  for (const card of els.mealGrid.querySelectorAll(".meal-day-card")) {
-    card.classList.toggle("is-active", card.dataset.day === state.activeMealDay);
-  }
+  switchMealDayTo(state.activeMealDay);
 }
 
 function loadMealPlanner() {
@@ -680,8 +673,6 @@ function addRecipeToPlan(recipeId) {
   if (!recipe) return;
   const existing = state.plannedRecipes.find((item) => item.recipeId === recipeId && item.status !== "done");
   if (existing) {
-    state.recipeView = "planned";
-    switchRecipeViewTo("planned");
     showToast("已经在准备做里");
     return;
   }
@@ -697,7 +688,6 @@ function addRecipeToPlan(recipeId) {
     })
   );
   savePlannedRecipes();
-  switchRecipeViewTo("planned");
   renderPlannedRecipes();
   showToast("已加入准备做");
 }
@@ -720,12 +710,7 @@ function renderPlannedRecipes() {
   if (!els.plannedRecipeList) return;
   const active = state.plannedRecipes
     .filter((item) => item.status !== "done")
-    .sort((a, b) => {
-      if (!a.plannedDate && !b.plannedDate) return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
-      if (!a.plannedDate) return 1;
-      if (!b.plannedDate) return -1;
-      return a.plannedDate.localeCompare(b.plannedDate);
-    });
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
   els.plannedRecipeCount.textContent = `${active.length}`;
   els.plannedRecipeList.replaceChildren();
   for (const item of active) {
@@ -745,11 +730,14 @@ function renderPlannedRecipeCard(item, recipe) {
     <div class="recipe-card-content">
       <button class="recipe-title-button" type="button"></button>
       <div class="planned-recipe-fields">
-        <label>日期<input data-planned-field="plannedDate" type="date" /></label>
         <label>备注<textarea data-planned-field="notes" rows="2"></textarea></label>
+        <div class="planned-meal-controls">
+          <label>星期<select data-planned-meal-day>${WEEK_DAYS.map((day) => `<option value="${day}">${day}</option>`).join("")}</select></label>
+          <label>餐次<select data-planned-meal-slot>${MEAL_SLOTS.map((meal) => `<option value="${meal.id}">${meal.label}</option>`).join("")}</select></label>
+        </div>
       </div>
       <div class="recipe-card-actions">
-        <button class="primary-button compact" type="button" data-planned-action="done">已做</button>
+        <button class="primary-button compact" type="button" data-planned-action="meal">加入 Meal Plan</button>
         <button class="ghost-button compact" type="button" data-planned-action="remove">移除</button>
         <a class="recipe-link" target="_blank" rel="noopener">打开链接</a>
       </div>
@@ -768,8 +756,9 @@ function renderPlannedRecipeCard(item, recipe) {
   const titleButton = card.querySelector(".recipe-title-button");
   titleButton.textContent = recipe.title;
   titleButton.addEventListener("click", () => openRecipeDialog(recipe));
-  card.querySelector('[data-planned-field="plannedDate"]').value = item.plannedDate || "";
   card.querySelector('[data-planned-field="notes"]').value = item.notes || "";
+  card.querySelector("[data-planned-meal-day]").value = state.activeMealDay;
+  card.querySelector("[data-planned-meal-slot]").value = "dinner";
   const link = card.querySelector(".recipe-link");
   link.href = recipe.url || "#";
   link.classList.toggle("is-hidden", !recipe.url);
@@ -794,14 +783,51 @@ function handlePlannedRecipeAction(event) {
   const id = card?.dataset.plannedRecipeId;
   const item = state.plannedRecipes.find((planned) => planned.id === id);
   if (!item) return;
-  if (button.dataset.plannedAction === "done") {
-    item.status = "done";
-    item.updatedAt = new Date().toISOString();
-  } else {
+  if (button.dataset.plannedAction === "meal") {
+    addPlannedRecipeToMealPlan(card, item);
+    return;
+  }
+  if (button.dataset.plannedAction === "remove") {
     state.plannedRecipes = state.plannedRecipes.filter((planned) => planned.id !== id);
   }
   savePlannedRecipes();
   renderPlannedRecipes();
+}
+
+function addPlannedRecipeToMealPlan(card, item) {
+  const recipe = state.recipes.find((candidate) => candidate.id === item.recipeId);
+  if (!recipe) return;
+  const day = card.querySelector("[data-planned-meal-day]")?.value || state.activeMealDay;
+  const meal = card.querySelector("[data-planned-meal-slot]")?.value || "dinner";
+  const input = [...els.mealGrid.querySelectorAll(".meal-input")].find(
+    (candidate) => candidate.dataset.day === day && candidate.dataset.meal === meal
+  );
+  if (!input) return;
+  const existingLines = input.value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (!existingLines.includes(recipe.title)) {
+    existingLines.push(recipe.title);
+    input.value = existingLines.join("\n");
+    saveMealPlanner();
+  }
+  state.activeMealDay = day;
+  switchMealDayTo(day);
+  const mealLabel = MEAL_SLOTS.find((slot) => slot.id === meal)?.label || "";
+  showToast(`已加入 ${day}${mealLabel}`);
+}
+
+function switchMealDayTo(day) {
+  if (!els.mealDayTabs || !els.mealGrid) return;
+  for (const tabButton of els.mealDayTabs.querySelectorAll("button[data-day]")) {
+    const isActive = tabButton.dataset.day === day;
+    tabButton.classList.toggle("is-active", isActive);
+    tabButton.setAttribute("aria-selected", String(isActive));
+  }
+  for (const card of els.mealGrid.querySelectorAll(".meal-day-card")) {
+    card.classList.toggle("is-active", card.dataset.day === day);
+  }
 }
 
 function matchesRecipeFilters(recipe) {
