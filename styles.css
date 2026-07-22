@@ -332,10 +332,10 @@ select:focus {
 }
 
 .planner-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+  min-width: min(100%, 330px);
 }
 
 .meal-day-tabs {
@@ -880,16 +880,10 @@ dialog::backdrop {
     align-items: flex-start;
   }
 
-  .planner-actions,
   .meal-slots,
   .planner-notes-grid,
   .sync-grid {
     grid-template-columns: 1fr;
-  }
-
-  .planner-actions {
-    display: grid;
-    width: 100%;
   }
 
   .draft-photo-field {

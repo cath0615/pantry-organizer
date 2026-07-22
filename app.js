@@ -92,7 +92,8 @@ const els = {
   mealIdeasNote: $("mealIdeasNote"),
   shoppingNote: $("shoppingNote"),
   clearMealPlanButton: $("clearMealPlanButton"),
-  clearMealNotesButton: $("clearMealNotesButton"),
+  clearMealIdeasButton: $("clearMealIdeasButton"),
+  clearShoppingNoteButton: $("clearShoppingNoteButton"),
   recipeLinkInput: $("recipeLinkInput"),
   recipeSubTabs: $("recipeSubTabs"),
   saveRecipeLinkButton: $("saveRecipeLinkButton"),
@@ -233,7 +234,8 @@ function bindEvents() {
   on(els.mealIdeasNote, "input", saveMealPlanner);
   on(els.shoppingNote, "input", saveMealPlanner);
   on(els.clearMealPlanButton, "click", clearMealPlan);
-  on(els.clearMealNotesButton, "click", clearMealNotes);
+  on(els.clearMealIdeasButton, "click", clearMealIdeas);
+  on(els.clearShoppingNoteButton, "click", clearShoppingNote);
   on(els.saveRecipeLinkButton, "click", saveRecipeFromLinkInput);
   on(els.recipeSubTabs, "click", switchRecipeView);
   on(els.clearRecipeLinkButton, "click", clearRecipeLinkInput);
@@ -413,11 +415,16 @@ function clearMealPlan() {
   showToast("已清空计划");
 }
 
-function clearMealNotes() {
+function clearMealIdeas() {
   if (els.mealIdeasNote) els.mealIdeasNote.value = "";
+  saveMealPlanner();
+  showToast("已清空想吃");
+}
+
+function clearShoppingNote() {
   if (els.shoppingNote) els.shoppingNote.value = "";
   saveMealPlanner();
-  showToast("已清空备忘");
+  showToast("已清空要买");
 }
 
 function mealKey(day, meal) {
