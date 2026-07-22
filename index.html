@@ -10,7 +10,7 @@
     <title>Pantry Organizer</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=40" />
+    <link rel="stylesheet" href="./styles.css?v=41" />
   </head>
   <body>
     <div class="app-shell">
@@ -171,6 +171,12 @@
             </label>
             <select id="recipeTagFilter" aria-label="分类筛选">
               <option value="all">所有分类</option>
+            </select>
+            <select id="recipeSortSelect" aria-label="菜谱排序">
+              <option value="updatedDesc">最近更新</option>
+              <option value="doneDesc">做过最多</option>
+              <option value="doneAsc">做过最少</option>
+              <option value="lastCookedDesc">最近做过</option>
             </select>
             <div class="recipe-backup-actions">
               <button class="ghost-button" id="exportRecipesButton" type="button">下载 JSON</button>
@@ -380,6 +386,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=40" type="module"></script>
+    <script src="./app.js?v=41" type="module"></script>
   </body>
 </html>

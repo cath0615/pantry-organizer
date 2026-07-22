@@ -569,6 +569,13 @@ select:focus {
   align-items: center;
 }
 
+.recipe-meta-line {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
 .planned-recipe-fields {
   display: grid;
   gap: 8px;

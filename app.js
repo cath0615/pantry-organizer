@@ -54,6 +54,7 @@ const state = {
   recipes: [],
   recipeQuery: "",
   recipeTag: "all",
+  recipeSort: "updatedDesc",
   recipeView: "library",
   plannedRecipes: [],
   activeTab: "pantry",
@@ -101,6 +102,7 @@ const els = {
   addRecipeButton: $("addRecipeButton"),
   recipeSearchInput: $("recipeSearchInput"),
   recipeTagFilter: $("recipeTagFilter"),
+  recipeSortSelect: $("recipeSortSelect"),
   exportRecipesButton: $("exportRecipesButton"),
   importRecipesInput: $("importRecipesInput"),
   recipeList: $("recipeList"),
@@ -246,6 +248,10 @@ function bindEvents() {
   });
   on(els.recipeTagFilter, "change", () => {
     state.recipeTag = els.recipeTagFilter.value;
+    renderRecipes();
+  });
+  on(els.recipeSortSelect, "change", () => {
+    state.recipeSort = els.recipeSortSelect.value;
     renderRecipes();
   });
   on(els.exportRecipesButton, "click", exportRecipes);
@@ -624,6 +630,7 @@ function renderRecipeCard(recipe) {
     <div class="recipe-card-content">
       <button class="recipe-title-button" type="button"></button>
       <div class="recipe-tags"></div>
+      <p class="recipe-meta-line"></p>
       <p class="recipe-summary"></p>
       <div class="recipe-card-actions">
         <button class="ghost-button compact" type="button" data-plan-recipe="${recipe.id}">准备做</button>
@@ -652,6 +659,10 @@ function renderRecipeCard(recipe) {
     tags.append(chip);
   }
   tags.classList.toggle("is-hidden", !recipe.tags?.length);
+  const metaLine = card.querySelector(".recipe-meta-line");
+  const doneCount = Number(recipe.doneCount || 0);
+  const lastCooked = recipe.lastCookedAt ? formatShortDate(recipe.lastCookedAt) : "";
+  metaLine.textContent = doneCount ? `做过 ${doneCount} 次${lastCooked ? ` · 最近 ${lastCooked}` : ""}` : "还没记录做过";
   const summary = [recipe.ingredients, recipe.notes, recipe.steps].filter(Boolean).join(" · ");
   const summaryElement = card.querySelector(".recipe-summary");
   summaryElement.textContent = summary.slice(0, 120);
@@ -738,6 +749,7 @@ function renderPlannedRecipeCard(item, recipe) {
       </div>
       <div class="recipe-card-actions">
         <button class="primary-button compact" type="button" data-planned-action="meal">加入 Meal Plan</button>
+        <button class="ghost-button compact" type="button" data-planned-action="done">已做</button>
         <button class="ghost-button compact" type="button" data-planned-action="remove">移除</button>
         <a class="recipe-link" target="_blank" rel="noopener">打开链接</a>
       </div>
@@ -787,6 +799,10 @@ function handlePlannedRecipeAction(event) {
     addPlannedRecipeToMealPlan(card, item);
     return;
   }
+  if (button.dataset.plannedAction === "done") {
+    markPlannedRecipeDone(id, item);
+    return;
+  }
   if (button.dataset.plannedAction === "remove") {
     state.plannedRecipes = state.plannedRecipes.filter((planned) => planned.id !== id);
   }
@@ -818,6 +834,24 @@ function addPlannedRecipeToMealPlan(card, item) {
   showToast(`已加入 ${day}${mealLabel}`);
 }
 
+function markPlannedRecipeDone(plannedId, item) {
+  const now = new Date().toISOString();
+  state.recipes = state.recipes.map((recipe) => {
+    if (recipe.id !== item.recipeId) return recipe;
+    return {
+      ...recipe,
+      doneCount: Number(recipe.doneCount || 0) + 1,
+      lastCookedAt: now,
+      updatedAt: now
+    };
+  });
+  state.plannedRecipes = state.plannedRecipes.filter((planned) => planned.id !== plannedId);
+  saveRecipes();
+  savePlannedRecipes();
+  renderRecipes();
+  showToast("已记录做过一次");
+}
+
 function switchMealDayTo(day) {
   if (!els.mealDayTabs || !els.mealGrid) return;
   for (const tabButton of els.mealDayTabs.querySelectorAll("button[data-day]")) {
@@ -840,7 +874,22 @@ function matchesRecipeFilters(recipe) {
 }
 
 function compareRecipes(a, b) {
+  if (state.recipeSort === "doneDesc") {
+    return Number(b.doneCount || 0) - Number(a.doneCount || 0) || String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+  }
+  if (state.recipeSort === "doneAsc") {
+    return Number(a.doneCount || 0) - Number(b.doneCount || 0) || String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+  }
+  if (state.recipeSort === "lastCookedDesc") {
+    return String(b.lastCookedAt || "").localeCompare(String(a.lastCookedAt || "")) || String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+  }
   return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+}
+
+function formatShortDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
 function openRecipeDialog(recipe = null) {
@@ -877,6 +926,8 @@ async function handleRecipeSubmit(event) {
     notes: els.recipeNotes.value,
     coverData: els.recipeCoverData.value,
     sourceText: existing?.sourceText || "",
+    doneCount: existing?.doneCount || 0,
+    lastCookedAt: existing?.lastCookedAt || "",
     createdAt: existing?.createdAt || new Date().toISOString()
   });
   recipe.updatedAt = new Date().toISOString();
@@ -1044,6 +1095,8 @@ function normalizeRecipe(recipe) {
     notes: String(recipe.notes || "").trim(),
     coverData: recipe.coverData || "",
     sourceText: String(recipe.sourceText || "").trim(),
+    doneCount: Number(recipe.doneCount || 0),
+    lastCookedAt: String(recipe.lastCookedAt || "").trim(),
     createdAt: recipe.createdAt || new Date().toISOString(),
     updatedAt: recipe.updatedAt || recipe.createdAt || new Date().toISOString()
   };
