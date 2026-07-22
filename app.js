@@ -9,6 +9,7 @@ const CATEGORIES_KEY = "pantry-organizer-categories";
 const LOCATIONS_KEY = "pantry-organizer-locations";
 const MEAL_PLANNER_KEY = "pantry-organizer-meal-planner";
 const RECIPES_KEY = "pantry-organizer-recipes";
+const PLANNED_RECIPES_KEY = "pantry-organizer-planned-recipes";
 const SYNC_SETTINGS_KEY = "pantry-organizer-github-sync";
 const DEFAULT_SYNC_OWNER = "cath0615";
 const DEFAULT_SYNC_REPO = "pantry-organizer-data";
@@ -53,6 +54,8 @@ const state = {
   recipes: [],
   recipeQuery: "",
   recipeTag: "all",
+  recipeView: "library",
+  plannedRecipes: [],
   activeTab: "pantry",
   mealPlanner: {
     meals: {},
@@ -91,6 +94,7 @@ const els = {
   clearMealPlanButton: $("clearMealPlanButton"),
   clearMealNotesButton: $("clearMealNotesButton"),
   recipeLinkInput: $("recipeLinkInput"),
+  recipeSubTabs: $("recipeSubTabs"),
   saveRecipeLinkButton: $("saveRecipeLinkButton"),
   clearRecipeLinkButton: $("clearRecipeLinkButton"),
   addRecipeButton: $("addRecipeButton"),
@@ -101,6 +105,10 @@ const els = {
   recipeList: $("recipeList"),
   recipeEmptyState: $("recipeEmptyState"),
   recipeCount: $("recipeCount"),
+  plannedRecipesView: $("plannedRecipesView"),
+  plannedRecipeList: $("plannedRecipeList"),
+  plannedRecipeEmptyState: $("plannedRecipeEmptyState"),
+  plannedRecipeCount: $("plannedRecipeCount"),
   recipeDialog: $("recipeDialog"),
   recipeForm: $("recipeForm"),
   recipeDialogTitle: $("recipeDialogTitle"),
@@ -175,6 +183,7 @@ async function init() {
   renderMealPlanner();
   loadMealPlanner();
   loadRecipes();
+  loadPlannedRecipes();
   bindEvents();
   setupSpeech();
   setupServiceWorker();
@@ -226,6 +235,7 @@ function bindEvents() {
   on(els.clearMealPlanButton, "click", clearMealPlan);
   on(els.clearMealNotesButton, "click", clearMealNotes);
   on(els.saveRecipeLinkButton, "click", saveRecipeFromLinkInput);
+  on(els.recipeSubTabs, "click", switchRecipeView);
   on(els.clearRecipeLinkButton, "click", clearRecipeLinkInput);
   on(els.addRecipeButton, "click", () => openRecipeDialog());
   on(els.recipeSearchInput, "input", () => {
@@ -239,6 +249,9 @@ function bindEvents() {
   on(els.exportRecipesButton, "click", exportRecipes);
   on(els.importRecipesInput, "change", importRecipes);
   on(els.recipeForm, "submit", handleRecipeSubmit);
+  on(els.recipeList, "click", handleRecipeListAction);
+  on(els.plannedRecipeList, "click", handlePlannedRecipeAction);
+  on(els.plannedRecipeList, "input", updatePlannedRecipeDetails);
   on(els.deleteRecipeButton, "click", deleteCurrentRecipe);
   on(els.closeRecipeDialogButton, "click", () => els.recipeDialog.close());
   on(els.recipeCoverInput, "change", handleRecipeCoverInput);
@@ -424,6 +437,36 @@ function saveRecipes() {
   localStorage.setItem(RECIPES_KEY, JSON.stringify(state.recipes));
 }
 
+function loadPlannedRecipes() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PLANNED_RECIPES_KEY) || "[]");
+    state.plannedRecipes = Array.isArray(saved) ? saved.map(normalizePlannedRecipe).filter((item) => item.recipeId) : [];
+  } catch {
+    state.plannedRecipes = [];
+  }
+}
+
+function savePlannedRecipes() {
+  localStorage.setItem(PLANNED_RECIPES_KEY, JSON.stringify(state.plannedRecipes));
+}
+
+function switchRecipeView(event) {
+  const button = event.target.closest("button[data-recipe-view]");
+  if (!button) return;
+  state.recipeView = button.dataset.recipeView;
+  for (const tabButton of els.recipeSubTabs.querySelectorAll("button[data-recipe-view]")) {
+    const isActive = tabButton.dataset.recipeView === state.recipeView;
+    tabButton.classList.toggle("is-active", isActive);
+    tabButton.setAttribute("aria-selected", String(isActive));
+  }
+  const showLibrary = state.recipeView === "library";
+  for (const element of [document.querySelector(".recipe-capture"), document.querySelector(".recipe-toolbar"), document.querySelector(".recipes-section")]) {
+    if (element) element.classList.toggle("is-hidden", !showLibrary);
+  }
+  els.plannedRecipesView?.classList.toggle("is-hidden", showLibrary);
+  if (!showLibrary) renderPlannedRecipes();
+}
+
 async function saveRecipeFromLinkInput() {
   const text = els.recipeLinkInput.value.trim();
   if (!text) {
@@ -545,6 +588,7 @@ function renderRecipes() {
     els.recipeList.append(renderRecipeCard(recipe));
   }
   els.recipeEmptyState.classList.toggle("is-hidden", filtered.length > 0);
+  renderPlannedRecipes();
 }
 
 function refreshRecipeTagFilter() {
@@ -581,7 +625,10 @@ function renderRecipeCard(recipe) {
       <button class="recipe-title-button" type="button"></button>
       <div class="recipe-tags"></div>
       <p class="recipe-summary"></p>
-      <a class="recipe-link" target="_blank" rel="noopener">打开链接</a>
+      <div class="recipe-card-actions">
+        <button class="ghost-button compact" type="button" data-plan-recipe="${recipe.id}">准备做</button>
+        <a class="recipe-link" target="_blank" rel="noopener">打开链接</a>
+      </div>
     </div>
   `;
   const thumb = card.querySelector(".recipe-thumb");
@@ -613,6 +660,141 @@ function renderRecipeCard(recipe) {
   link.href = recipe.url || "#";
   link.classList.toggle("is-hidden", !recipe.url);
   return card;
+}
+
+function handleRecipeListAction(event) {
+  const button = event.target.closest("button[data-plan-recipe]");
+  if (!button) return;
+  addRecipeToPlan(button.dataset.planRecipe);
+}
+
+function addRecipeToPlan(recipeId) {
+  const recipe = state.recipes.find((item) => item.id === recipeId);
+  if (!recipe) return;
+  const existing = state.plannedRecipes.find((item) => item.recipeId === recipeId && item.status !== "done");
+  if (existing) {
+    state.recipeView = "planned";
+    switchRecipeViewTo("planned");
+    showToast("已经在准备做里");
+    return;
+  }
+  state.plannedRecipes.unshift(
+    normalizePlannedRecipe({
+      id: createId(),
+      recipeId,
+      plannedDate: "",
+      notes: "",
+      status: "planned",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    })
+  );
+  savePlannedRecipes();
+  switchRecipeViewTo("planned");
+  renderPlannedRecipes();
+  showToast("已加入准备做");
+}
+
+function switchRecipeViewTo(view) {
+  state.recipeView = view;
+  for (const tabButton of els.recipeSubTabs.querySelectorAll("button[data-recipe-view]")) {
+    const isActive = tabButton.dataset.recipeView === view;
+    tabButton.classList.toggle("is-active", isActive);
+    tabButton.setAttribute("aria-selected", String(isActive));
+  }
+  const showLibrary = view === "library";
+  for (const element of [document.querySelector(".recipe-capture"), document.querySelector(".recipe-toolbar"), document.querySelector(".recipes-section")]) {
+    if (element) element.classList.toggle("is-hidden", !showLibrary);
+  }
+  els.plannedRecipesView?.classList.toggle("is-hidden", showLibrary);
+}
+
+function renderPlannedRecipes() {
+  if (!els.plannedRecipeList) return;
+  const active = state.plannedRecipes
+    .filter((item) => item.status !== "done")
+    .sort((a, b) => {
+      if (!a.plannedDate && !b.plannedDate) return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+      if (!a.plannedDate) return 1;
+      if (!b.plannedDate) return -1;
+      return a.plannedDate.localeCompare(b.plannedDate);
+    });
+  els.plannedRecipeCount.textContent = `${active.length}`;
+  els.plannedRecipeList.replaceChildren();
+  for (const item of active) {
+    const recipe = state.recipes.find((candidate) => candidate.id === item.recipeId);
+    if (!recipe) continue;
+    els.plannedRecipeList.append(renderPlannedRecipeCard(item, recipe));
+  }
+  els.plannedRecipeEmptyState.classList.toggle("is-hidden", active.length > 0);
+}
+
+function renderPlannedRecipeCard(item, recipe) {
+  const card = document.createElement("article");
+  card.className = "recipe-card planned-recipe-card";
+  card.dataset.plannedRecipeId = item.id;
+  card.innerHTML = `
+    <div class="recipe-thumb recipe-thumb-placeholder"></div>
+    <div class="recipe-card-content">
+      <button class="recipe-title-button" type="button"></button>
+      <div class="planned-recipe-fields">
+        <label>日期<input data-planned-field="plannedDate" type="date" /></label>
+        <label>备注<textarea data-planned-field="notes" rows="2"></textarea></label>
+      </div>
+      <div class="recipe-card-actions">
+        <button class="primary-button compact" type="button" data-planned-action="done">已做</button>
+        <button class="ghost-button compact" type="button" data-planned-action="remove">移除</button>
+        <a class="recipe-link" target="_blank" rel="noopener">打开链接</a>
+      </div>
+    </div>
+  `;
+  const thumb = card.querySelector(".recipe-thumb");
+  if (recipe.coverData) {
+    const image = document.createElement("img");
+    image.className = "recipe-thumb";
+    image.alt = "";
+    image.src = recipe.coverData;
+    thumb.replaceWith(image);
+  } else {
+    thumb.textContent = recipe.title.slice(0, 1) || "菜";
+  }
+  const titleButton = card.querySelector(".recipe-title-button");
+  titleButton.textContent = recipe.title;
+  titleButton.addEventListener("click", () => openRecipeDialog(recipe));
+  card.querySelector('[data-planned-field="plannedDate"]').value = item.plannedDate || "";
+  card.querySelector('[data-planned-field="notes"]').value = item.notes || "";
+  const link = card.querySelector(".recipe-link");
+  link.href = recipe.url || "#";
+  link.classList.toggle("is-hidden", !recipe.url);
+  return card;
+}
+
+function updatePlannedRecipeDetails(event) {
+  const field = event.target.closest("[data-planned-field]");
+  if (!field) return;
+  const card = field.closest("[data-planned-recipe-id]");
+  const item = state.plannedRecipes.find((planned) => planned.id === card?.dataset.plannedRecipeId);
+  if (!item) return;
+  item[field.dataset.plannedField] = field.value;
+  item.updatedAt = new Date().toISOString();
+  savePlannedRecipes();
+}
+
+function handlePlannedRecipeAction(event) {
+  const button = event.target.closest("button[data-planned-action]");
+  if (!button) return;
+  const card = button.closest("[data-planned-recipe-id]");
+  const id = card?.dataset.plannedRecipeId;
+  const item = state.plannedRecipes.find((planned) => planned.id === id);
+  if (!item) return;
+  if (button.dataset.plannedAction === "done") {
+    item.status = "done";
+    item.updatedAt = new Date().toISOString();
+  } else {
+    state.plannedRecipes = state.plannedRecipes.filter((planned) => planned.id !== id);
+  }
+  savePlannedRecipes();
+  renderPlannedRecipes();
 }
 
 function matchesRecipeFilters(recipe) {
@@ -726,7 +908,9 @@ function deleteCurrentRecipe() {
   const id = els.recipeId.value;
   if (!id) return;
   state.recipes = state.recipes.filter((recipe) => recipe.id !== id);
+  state.plannedRecipes = state.plannedRecipes.filter((item) => item.recipeId !== id);
   saveRecipes();
+  savePlannedRecipes();
   els.recipeDialog.close();
   renderRecipes();
   showToast("菜谱已删除");
@@ -760,7 +944,8 @@ function exportRecipes() {
   const payload = {
     version: 1,
     exportedAt: new Date().toISOString(),
-    recipes: state.recipes
+    recipes: state.recipes,
+    plannedRecipes: state.plannedRecipes
   };
   downloadTextFile(`recipes-backup-${todaySlug()}.json`, JSON.stringify(payload));
   showToast("Recipe JSON 已下载");
@@ -774,6 +959,10 @@ async function importRecipes(event) {
     const incoming = Array.isArray(payload) ? payload : payload.recipes;
     if (!Array.isArray(incoming)) throw new Error("Invalid recipe backup");
     mergeRecipes(incoming);
+    if (Array.isArray(payload.plannedRecipes)) {
+      mergePlannedRecipes(payload.plannedRecipes);
+      savePlannedRecipes();
+    }
     saveRecipes();
     renderRecipes();
     showToast(`导入了 ${incoming.length} 个菜谱`);
@@ -798,6 +987,19 @@ function mergeRecipes(incoming) {
   }
 }
 
+function mergePlannedRecipes(incoming) {
+  const existingById = new Map(state.plannedRecipes.map((item) => [item.id, item]));
+  for (const item of incoming) {
+    const planned = normalizePlannedRecipe({ ...item, id: item.id || createId() });
+    const existing = existingById.get(planned.id);
+    if (existing) {
+      state.plannedRecipes = state.plannedRecipes.map((current) => (current.id === existing.id ? { ...existing, ...planned } : current));
+    } else {
+      state.plannedRecipes.push(planned);
+    }
+  }
+}
+
 function normalizeRecipe(recipe) {
   return {
     id: recipe.id || createId(),
@@ -811,6 +1013,18 @@ function normalizeRecipe(recipe) {
     sourceText: String(recipe.sourceText || "").trim(),
     createdAt: recipe.createdAt || new Date().toISOString(),
     updatedAt: recipe.updatedAt || recipe.createdAt || new Date().toISOString()
+  };
+}
+
+function normalizePlannedRecipe(item) {
+  return {
+    id: item.id || createId(),
+    recipeId: String(item.recipeId || "").trim(),
+    plannedDate: String(item.plannedDate || "").trim(),
+    notes: String(item.notes || "").trim(),
+    status: item.status === "done" ? "done" : "planned",
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
   };
 }
 
@@ -1690,7 +1904,7 @@ function buildSyncPayload(target = "all") {
     return { ...base, mealPlanner: state.mealPlanner };
   }
   if (target === "recipes") {
-    return { ...base, recipes: state.recipes };
+    return { ...base, recipes: state.recipes, plannedRecipes: state.plannedRecipes };
   }
   return {
     ...base,
@@ -1698,6 +1912,7 @@ function buildSyncPayload(target = "all") {
     locations: state.locations,
     mealPlanner: state.mealPlanner,
     recipes: state.recipes,
+    plannedRecipes: state.plannedRecipes,
     items: state.items
   };
 }
@@ -1706,6 +1921,7 @@ async function applyBackupPayload(payload, options = {}) {
   const requireItems = options.requireItems ?? false;
   const incomingItems = Array.isArray(payload) ? payload : payload.items;
   const incomingRecipes = Array.isArray(payload?.recipes) ? payload.recipes : [];
+  const incomingPlannedRecipes = Array.isArray(payload?.plannedRecipes) ? payload.plannedRecipes : [];
   let importedMealPlanner = false;
   if (requireItems && !Array.isArray(incomingItems)) throw new Error("Invalid backup");
   if (Array.isArray(payload.categories)) {
@@ -1730,6 +1946,10 @@ async function applyBackupPayload(payload, options = {}) {
     mergeRecipes(incomingRecipes);
     saveRecipes();
   }
+  if (incomingPlannedRecipes.length) {
+    mergePlannedRecipes(incomingPlannedRecipes);
+    savePlannedRecipes();
+  }
   if (payload?.mealPlanner && typeof payload.mealPlanner === "object") {
     state.mealPlanner = {
       meals: payload.mealPlanner.meals || {},
@@ -1744,7 +1964,12 @@ async function applyBackupPayload(payload, options = {}) {
   refreshLocationControls();
   render();
   renderRecipes();
-  return { items: Array.isArray(incomingItems) ? incomingItems.length : 0, recipes: incomingRecipes.length, mealPlanner: importedMealPlanner };
+  return {
+    items: Array.isArray(incomingItems) ? incomingItems.length : 0,
+    recipes: incomingRecipes.length,
+    plannedRecipes: incomingPlannedRecipes.length,
+    mealPlanner: importedMealPlanner
+  };
 }
 
 function downloadBackupText() {
@@ -1966,6 +2191,7 @@ function formatImportResult(result) {
   const parts = [];
   if (result.items) parts.push(`${result.items} 个库存`);
   if (result.recipes) parts.push(`${result.recipes} 个菜谱`);
+  if (result.plannedRecipes) parts.push(`${result.plannedRecipes} 个准备做`);
   if (result.mealPlanner) parts.push("Meal Plan");
   return parts.length ? `导入了 ${parts.join("，")}` : "没有发现可导入的数据";
 }
@@ -1974,6 +2200,7 @@ function formatSyncResult(result) {
   const parts = [];
   if (result.items) parts.push(`${result.items} 个库存`);
   if (result.recipes) parts.push(`${result.recipes} 个菜谱`);
+  if (result.plannedRecipes) parts.push(`${result.plannedRecipes} 个准备做`);
   if (result.mealPlanner) parts.push("Meal Plan");
   return parts.length ? parts.join("，") : "没有新数据";
 }

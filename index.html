@@ -10,7 +10,7 @@
     <title>Pantry Organizer</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=37" />
+    <link rel="stylesheet" href="./styles.css?v=38" />
   </head>
   <body>
     <div class="app-shell">
@@ -143,6 +143,10 @@
         </div>
 
         <div class="tab-view" id="recipesView" data-tab-panel="recipes">
+          <div class="sub-tabs" id="recipeSubTabs" role="tablist" aria-label="菜谱页面">
+            <button class="is-active" type="button" data-recipe-view="library" aria-selected="true">菜谱</button>
+            <button type="button" data-recipe-view="planned" aria-selected="false">准备做</button>
+          </div>
           <section class="recipe-capture" aria-labelledby="recipeCaptureTitle">
             <div class="section-title-row">
               <h2 id="recipeCaptureTitle">保存菜谱</h2>
@@ -183,6 +187,15 @@
             </div>
             <div class="recipe-list" id="recipeList"></div>
             <p class="empty-state" id="recipeEmptyState">还没有菜谱</p>
+          </section>
+
+          <section class="planned-recipes-section is-hidden" id="plannedRecipesView" aria-labelledby="plannedRecipesTitle">
+            <div class="section-title-row">
+              <h2 id="plannedRecipesTitle">准备做</h2>
+              <span class="recipe-count" id="plannedRecipeCount">0</span>
+            </div>
+            <div class="planned-recipe-list" id="plannedRecipeList"></div>
+            <p class="empty-state" id="plannedRecipeEmptyState">还没有准备做的菜谱</p>
           </section>
         </div>
       </main>
@@ -366,6 +379,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=37" type="module"></script>
+    <script src="./app.js?v=38" type="module"></script>
   </body>
 </html>
