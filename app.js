@@ -487,7 +487,7 @@ async function saveRecipeFromLinkInput() {
   const existing = state.recipes.find((recipe) => recipe.url === url);
   let preview = null;
   if (!existing) {
-    showToast("正在抓取封面");
+    showToast("正在抓取封面和步骤");
     preview = await fetchRecipePreview(url);
   }
   openRecipeDialog({
@@ -496,8 +496,11 @@ async function saveRecipeFromLinkInput() {
     title: existing?.title || extractRecipeTitle(text) || preview?.title || "未命名菜谱",
     url: preview?.finalUrl || url,
     tags: existing?.tags || [],
+    ingredients: existing?.ingredients || preview?.ingredients || "",
+    steps: existing?.steps || preview?.steps || "",
+    notes: existing?.notes || "",
     coverData: existing?.coverData || preview?.coverData || "",
-    sourceText: text
+    sourceText: existing?.sourceText || preview?.rawText || text
   });
   showToast(existing ? "这个链接已经保存过，已打开已有菜谱" : "确认后保存");
 }

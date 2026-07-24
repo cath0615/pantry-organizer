@@ -114,14 +114,137 @@ async function handleXhsPreview(req, res) {
   const result = await readXhsWithPlaywright(url, { sourceType: "article", settleMs: 6000 });
   const coverUrl = pickPrimaryImages(result.media, 1)[0] || "";
   const coverData = coverUrl ? await imageUrlToDataUrl(coverUrl).catch(() => "") : "";
+  const recipeText = extractRecipeText(result.text || "");
   sendJson(res, 200, {
     ok: Boolean(result.ok || result.title || coverData),
     title: cleanPreviewTitle(result.title || ""),
     finalUrl: result.finalUrl || url,
     coverUrl,
     coverData,
+    ingredients: recipeText.ingredients,
+    steps: recipeText.steps,
+    rawText: recipeText.rawText,
     error: result.error || ""
   });
+}
+
+function extractRecipeText(text) {
+  const rawText = cleanPostText(text);
+  return {
+    ingredients: extractIngredients(rawText).join("\n"),
+    steps: extractNumberedSteps(rawText).join("\n"),
+    rawText
+  };
+}
+
+function cleanPostText(text) {
+  const stopPatterns = [
+    /^\d+条精选评论$/,
+    /^查看更多$/,
+    /^打开小红书查看全部精彩评论$/,
+    /^热门推荐$/,
+    /^@.+的热门笔记$/,
+    /^打开小红书查看Ta的更多笔记$/,
+    /^说点什么/
+  ];
+  const lines = [];
+  for (const rawLine of String(text || "").replace(/\r/g, "\n").split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (stopPatterns.some((pattern) => pattern.test(line))) break;
+    lines.push(line);
+  }
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function extractNumberedSteps(text) {
+  const normalized = normalizeStepMarkers(text);
+  const markerPattern = /(?:^|[\n\s。；;])@@STEP_(\d{1,2})@@\s*/g;
+  const markers = [];
+  let match;
+  while ((match = markerPattern.exec(normalized))) {
+    markers.push({ number: Number(match[1]), start: match.index, contentStart: markerPattern.lastIndex });
+  }
+  if (markers.length < 2) return [];
+
+  const steps = [];
+  let expected = markers[0].number === 1 ? 1 : markers[0].number;
+  for (let index = 0; index < markers.length; index += 1) {
+    const marker = markers[index];
+    if (index > 0 && marker.number !== expected) break;
+    const end = index + 1 < markers.length ? markers[index + 1].start : normalized.length;
+    const step = cleanStepText(normalized.slice(marker.contentStart, end));
+    if (isLikelyStep(step)) steps.push(step);
+    expected += 1;
+  }
+  return uniqueValues(steps).slice(0, 18);
+}
+
+function normalizeStepMarkers(text) {
+  const circled = {
+    "①": 1,
+    "②": 2,
+    "③": 3,
+    "④": 4,
+    "⑤": 5,
+    "⑥": 6,
+    "⑦": 7,
+    "⑧": 8,
+    "⑨": 9,
+    "⑩": 10
+  };
+  return String(text || "")
+    .replace(/([1-9]|10)\uFE0F?\u20E3/g, (_, number) => ` @@STEP_${number}@@ `)
+    .replace(/[①②③④⑤⑥⑦⑧⑨⑩]/g, (value) => ` @@STEP_${circled[value]}@@ `)
+    .replace(/(^|[\n\s。；;])第?\s*([1-9]\d?)\s*[\.、)：:)）-]\s*/g, (_, prefix, number) => `${prefix}@@STEP_${number}@@ `);
+}
+
+function cleanStepText(value) {
+  const withoutMarkers = String(value || "")
+    .replace(/@@STEP_\d{1,2}@@/g, "")
+    .split(/\s+#/)[0]
+    .split(/\n\d{4}-\d{2}-\d{2}/)[0];
+  return withoutMarkers
+    .replace(/\s+/g, " ")
+    .replace(/^[：:，,、。；;\s-]+/, "")
+    .replace(/[ \t]+([，。；])/g, "$1")
+    .trim();
+}
+
+function isLikelyStep(step) {
+  if (!step || step.length < 2 || step.length > 220) return false;
+  if (/^(评论|推荐|收藏|点赞|关注|展开|打开小红书)/.test(step)) return false;
+  return /[\u3400-\u9fff]/.test(step);
+}
+
+function extractIngredients(text) {
+  const lines = String(text || "")
+    .split(/\n|。|；|;/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const ingredients = [];
+  for (const line of lines) {
+    if (!/^(材料|食材|调料|配料|用料|准备)[：:\s]/.test(line)) continue;
+    const normalized = line.replace(/^(材料|食材|调料|配料|用料|准备)[：:\s]*/, "").trim();
+    for (const item of normalized.split(/[，,、]/)) {
+      const ingredient = item.trim();
+      if (ingredient.length < 2 || ingredient.length > 80) continue;
+      ingredients.push(ingredient);
+    }
+  }
+  return uniqueValues(ingredients).slice(0, 24);
+}
+
+function uniqueValues(values) {
+  const seen = new Set();
+  const unique = [];
+  for (const value of values) {
+    const key = value.replace(/\s+/g, " ");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(value);
+  }
+  return unique;
 }
 
 function cleanPreviewTitle(value) {
