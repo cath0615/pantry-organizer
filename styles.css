@@ -529,6 +529,11 @@ select:focus {
   gap: 12px;
 }
 
+.recipe-card.is-newly-imported {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(40, 119, 91, 0.18);
+}
+
 .item-thumb {
   width: 64px;
   height: 64px;

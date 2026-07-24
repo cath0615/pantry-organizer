@@ -479,12 +479,17 @@ async function saveRecipeFromLinkInput() {
     showToast("先粘贴链接");
     return;
   }
-  const url = extractRecipeUrl(text);
+  const urls = extractRecipeUrls(text);
+  if (urls.length > 1) {
+    await saveRecipeLinkBatch(text, urls);
+    return;
+  }
+  const url = urls[0] || "";
   if (!url) {
     showToast("没有找到链接");
     return;
   }
-  const existing = state.recipes.find((recipe) => recipe.url === url);
+  const existing = findRecipeByUrl(url);
   let preview = null;
   if (!existing) {
     showToast("正在抓取封面和步骤");
@@ -505,7 +510,67 @@ async function saveRecipeFromLinkInput() {
   showToast(existing ? "这个链接已经保存过，已打开已有菜谱" : "确认后保存");
 }
 
-async function fetchRecipePreview(url) {
+async function saveRecipeLinkBatch(text, urls) {
+  let added = 0;
+  let skipped = 0;
+  let failed = 0;
+  const importedIds = [];
+  els.saveRecipeLinkButton.disabled = true;
+
+  for (let index = 0; index < urls.length; index += 1) {
+    const url = urls[index];
+    const existing = findRecipeByUrl(url);
+    if (existing) {
+      skipped += 1;
+      continue;
+    }
+    showToast(`正在抓第 ${index + 1}/${urls.length} 个`);
+    const preview = await fetchRecipePreview(url, { quiet: true });
+    if (!preview) {
+      failed += 1;
+      continue;
+    }
+    const finalUrl = preview.finalUrl || url;
+    const duplicate = findRecipeByUrl(finalUrl);
+    if (duplicate) {
+      skipped += 1;
+      continue;
+    }
+    const now = new Date().toISOString();
+    const recipe = normalizeRecipe({
+      id: createId(),
+      title: preview.title || extractRecipeTitle(text) || "未命名菜谱",
+      url: finalUrl,
+      tags: [],
+      ingredients: preview.ingredients || "",
+      steps: preview.steps || "",
+      notes: "",
+      coverData: preview.coverData || "",
+      sourceText: preview.rawText || text,
+      createdAt: now,
+      updatedAt: now
+    });
+    state.recipes.unshift(recipe);
+    importedIds.push(recipe.id);
+    added += 1;
+  }
+
+  els.saveRecipeLinkButton.disabled = false;
+  if (added) {
+    saveRecipes();
+    clearRecipeLinkInput();
+    state.recipeQuery = "";
+    if (els.recipeSearchInput) els.recipeSearchInput.value = "";
+    state.recipeTag = "all";
+    state.recipeSort = "updatedDesc";
+    if (els.recipeSortSelect) els.recipeSortSelect.value = state.recipeSort;
+    renderRecipes();
+    highlightImportedRecipes(importedIds);
+  }
+  showToast(`批量完成：新增 ${added}，重复 ${skipped}，失败 ${failed}`);
+}
+
+async function fetchRecipePreview(url, options = {}) {
   const endpoints = getRecipePreviewEndpoints();
   for (const endpoint of endpoints) {
     try {
@@ -525,7 +590,7 @@ async function fetchRecipePreview(url) {
       // The local helper is optional; GitHub Pages still works without it.
     }
   }
-  showToast("GitHub Pages 不能自动抓封面，可在弹窗里上传");
+  if (!options.quiet) showToast("GitHub Pages 不能自动抓封面，可在弹窗里上传");
   return null;
 }
 
@@ -543,8 +608,29 @@ function clearRecipeLinkInput() {
 }
 
 function extractRecipeUrl(text) {
-  const match = text.match(/https?:\/\/(?:www\.)?(?:xiaohongshu\.com|xhslink\.com|xhs\.cn|xhsurl\.com)\/[^\s，。；;,）)】]+/i);
-  return match ? match[0] : "";
+  return extractRecipeUrls(text)[0] || "";
+}
+
+function extractRecipeUrls(text) {
+  const matches = String(text || "").match(/https?:\/\/(?:www\.)?(?:xiaohongshu\.com|xhslink\.com|xhs\.cn|xhsurl\.com)\/[^\s，。；;,）)】]+/gi) || [];
+  return [...new Set(matches.map((url) => url.trim()))];
+}
+
+function findRecipeByUrl(url) {
+  const key = recipeUrlKey(url);
+  if (!key) return null;
+  return state.recipes.find((recipe) => recipeUrlKey(recipe.url) === key) || null;
+}
+
+function recipeUrlKey(value) {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.replace(/^www\./, "");
+    if (host.includes("xiaohongshu.com")) return `${host}${url.pathname}`;
+    return `${host}${url.pathname}${url.search}`;
+  } catch {
+    return String(value || "").trim();
+  }
 }
 
 function extractRecipeTitle(text) {
@@ -628,6 +714,7 @@ function refreshRecipeCategoryOptions(tags = getRecipeTags()) {
 function renderRecipeCard(recipe) {
   const card = document.createElement("article");
   card.className = "recipe-card";
+  card.dataset.recipeId = recipe.id;
   card.innerHTML = `
     <div class="recipe-thumb recipe-thumb-placeholder"></div>
     <div class="recipe-card-content">
@@ -674,6 +761,16 @@ function renderRecipeCard(recipe) {
   link.href = recipe.url || "#";
   link.classList.toggle("is-hidden", !recipe.url);
   return card;
+}
+
+function highlightImportedRecipes(ids) {
+  if (!ids.length || !els.recipeList) return;
+  const idSet = new Set(ids);
+  for (const card of els.recipeList.querySelectorAll("[data-recipe-id]")) {
+    if (!idSet.has(card.dataset.recipeId)) continue;
+    card.classList.add("is-newly-imported");
+    window.setTimeout(() => card.classList.remove("is-newly-imported"), 5000);
+  }
 }
 
 function handleRecipeListAction(event) {
@@ -1063,9 +1160,10 @@ async function importRecipes(event) {
 function mergeRecipes(incoming) {
   const existingById = new Map(state.recipes.map((recipe) => [recipe.id, recipe]));
   const existingByUrl = new Map(state.recipes.filter((recipe) => recipe.url).map((recipe) => [recipe.url, recipe]));
+  const existingByUrlKey = new Map(state.recipes.filter((recipe) => recipe.url).map((recipe) => [recipeUrlKey(recipe.url), recipe]));
   for (const item of incoming) {
     const recipe = normalizeRecipe({ ...item, id: item.id || createId() });
-    const existing = existingById.get(recipe.id) || (recipe.url ? existingByUrl.get(recipe.url) : null);
+    const existing = existingById.get(recipe.id) || (recipe.url ? existingByUrl.get(recipe.url) || existingByUrlKey.get(recipeUrlKey(recipe.url)) : null);
     if (existing) {
       state.recipes = state.recipes.map((current) => (current.id === existing.id ? { ...existing, ...recipe } : current));
     } else {
