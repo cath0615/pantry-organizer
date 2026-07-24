@@ -31,6 +31,14 @@ const MEAL_SLOTS = [
   { id: "lunch", label: "中饭" },
   { id: "dinner", label: "晚饭" }
 ];
+const RECIPE_TAG_RULES = [
+  { tag: "低卡", pattern: /低卡|低脂|低糖|无糖|0糖|零糖|无油|0油|少油|减脂|减肥|轻食|高蛋白|生酮|控糖/i },
+  { tag: "甜品", pattern: /甜品|甜点|蛋糕|布丁|慕斯|毛巾卷|司康|曲奇|饼干|派|挞|提拉米苏|奶冻|雪媚娘|千层|巴斯克|芝士蛋糕|可丽饼|松饼|舒芙蕾/i },
+  { tag: "面包", pattern: /面包|吐司|贝果|欧包|餐包|佛卡夏|碱水|可颂|牛角包|法棍|sourdough|bagel/i },
+  { tag: "鸡肉", pattern: /鸡肉|鸡腿|鸡胸|鸡翅|鸡爪|鸡丁|鸡排|鸡块|鸡柳|鸡胗|鸡肝|整鸡|半鸡|chicken/i },
+  { tag: "牛肉", pattern: /牛肉|牛腩|牛排|牛仔骨|肥牛|牛肋|牛舌|牛尾|牛柳|牛丸|牛筋|牛百叶|牛杂|beef|short ribs?/i },
+  { tag: "海鲜", pattern: /鱼(?!香)|虾|蟹|螃蟹|扇贝|干贝|贝柱|蛤蜊|花蛤|青口|贻贝|生蚝|牡蛎|鱿鱼|章鱼|墨鱼|鳕鱼|三文鱼|salmon|tuna|cod|shrimp|prawn|crab|scallop|seafood/i }
+];
 
 const state = {
   items: [],
@@ -495,17 +503,21 @@ async function saveRecipeFromLinkInput() {
     showToast("正在抓取封面和步骤");
     preview = await fetchRecipePreview(url);
   }
+  const draftTitle = existing?.title || extractRecipeTitle(text) || preview?.title || "未命名菜谱";
+  const draftIngredients = existing?.ingredients || preview?.ingredients || "";
+  const draftSteps = existing?.steps || preview?.steps || "";
+  const draftSourceText = existing?.sourceText || preview?.rawText || text;
   openRecipeDialog({
     ...(existing || {}),
     id: existing?.id || "",
-    title: existing?.title || extractRecipeTitle(text) || preview?.title || "未命名菜谱",
+    title: draftTitle,
     url: preview?.finalUrl || url,
-    tags: existing?.tags || [],
-    ingredients: existing?.ingredients || preview?.ingredients || "",
-    steps: existing?.steps || preview?.steps || "",
+    tags: existing?.tags || inferRecipeTags({ title: draftTitle, ingredients: draftIngredients, steps: draftSteps, sourceText: draftSourceText }),
+    ingredients: draftIngredients,
+    steps: draftSteps,
     notes: existing?.notes || "",
     coverData: existing?.coverData || preview?.coverData || "",
-    sourceText: existing?.sourceText || preview?.rawText || text
+    sourceText: draftSourceText
   });
   showToast(existing ? "这个链接已经保存过，已打开已有菜谱" : "确认后保存");
 }
@@ -537,16 +549,20 @@ async function saveRecipeLinkBatch(text, urls) {
       continue;
     }
     const now = new Date().toISOString();
+    const title = preview.title || extractRecipeTitle(text) || "未命名菜谱";
+    const ingredients = preview.ingredients || "";
+    const steps = preview.steps || "";
+    const sourceText = preview.rawText || text;
     const recipe = normalizeRecipe({
       id: createId(),
-      title: preview.title || extractRecipeTitle(text) || "未命名菜谱",
+      title,
       url: finalUrl,
-      tags: [],
-      ingredients: preview.ingredients || "",
-      steps: preview.steps || "",
+      tags: inferRecipeTags({ title, ingredients, steps, sourceText }),
+      ingredients,
+      steps,
       notes: "",
       coverData: preview.coverData || "",
-      sourceText: preview.rawText || text,
+      sourceText,
       createdAt: now,
       updatedAt: now
     });
@@ -671,6 +687,11 @@ function parseTags(value) {
         .map((tag) => tag.slice(0, 18))
     )
   ];
+}
+
+function inferRecipeTags(recipe) {
+  const haystack = [recipe.title, recipe.ingredients, recipe.steps, recipe.notes, recipe.sourceText].filter(Boolean).join(" ");
+  return RECIPE_TAG_RULES.filter((rule) => rule.pattern.test(haystack)).map((rule) => rule.tag);
 }
 
 function renderRecipes() {
