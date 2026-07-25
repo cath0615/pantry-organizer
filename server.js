@@ -168,14 +168,11 @@ function extractNumberedSteps(text) {
   if (markers.length < 2) return [];
 
   const steps = [];
-  let expected = markers[0].number === 1 ? 1 : markers[0].number;
   for (let index = 0; index < markers.length; index += 1) {
     const marker = markers[index];
-    if (index > 0 && marker.number !== expected) break;
     const end = index + 1 < markers.length ? markers[index + 1].start : normalized.length;
     const step = cleanStepText(normalized.slice(marker.contentStart, end));
-    if (isLikelyStep(step)) steps.push(`${marker.number}. ${step}`);
-    expected += 1;
+    if (isLikelyStep(step)) steps.push(`${steps.length + 1}. ${step}`);
   }
   return uniqueValues(steps).slice(0, 18);
 }
@@ -228,7 +225,7 @@ function extractIngredients(text) {
     const line = rawLine.replace(/^[-*•]\s*/, "").trim();
     if (isIngredientSectionStart(line)) {
       inIngredientSection = true;
-      const inline = line.replace(/^(材料|食材|调料|配料|用料|准备)[：:\s]*/, "").trim();
+      const inline = extractInlineIngredientText(line);
       if (inline) addIngredientCandidates(ingredients, inline);
       continue;
     }
@@ -243,16 +240,38 @@ function extractIngredients(text) {
 }
 
 function isIngredientSectionStart(line) {
-  return /^(材料|食材|调料|配料|用料|准备)[：:\s]*$/.test(line) || /^(材料|食材|调料|配料|用料|准备)[：:\s]/.test(line);
+  const plain = stripDecorativePrefix(line);
+  return /^(材料|食材|调料|配料|用料|准备)[：:\s]*$/.test(plain) || /^(材料|食材|调料|配料|用料|准备)[：:\s]/.test(plain) || isIngredientGroupHeading(plain);
+}
+
+function extractInlineIngredientText(line) {
+  const plain = stripDecorativePrefix(line);
+  if (!/^(材料|食材|调料|配料|用料|准备)[：:\s]/.test(plain)) return "";
+  return plain.replace(/^(材料|食材|调料|配料|用料|准备)[：:\s]*/, "").trim();
+}
+
+function stripDecorativePrefix(line) {
+  return String(line || "").replace(/^[^\u3400-\u9fffA-Za-z0-9]+/, "").trim();
+}
+
+function isIngredientGroupHeading(line) {
+  const plain = stripDecorativePrefix(line)
+    .replace(/[（(][^）)]*[）)]/g, "")
+    .replace(/[；;：:]\s*$/, "")
+    .trim();
+  if (!plain || /^(做法|步骤|教程|参考食谱|制作|操作|tips?|小贴士)/i.test(plain)) return false;
+  if (/(?:\d+(?:\.\d+)?|[一二两三四五六七八九十半]+)\s*(?:g|kg|克|斤|ml|毫升|升|颗|个|只|枚|片|根|条|块|勺|大勺|小勺|茶匙|汤匙|杯|碗|包|袋|盒|罐|撮|滴)/i.test(plain)) return false;
+  return /(馅料|糯米皮|米皮|饼皮|面团|内馅|夹心|奶油|酱汁|淋面|装饰|配料区|材料区)/.test(plain);
 }
 
 function isIngredientSectionEnd(line) {
   if (!line) return true;
-  if (/^#/.test(line)) return true;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(line)) return true;
-  if (/^(做法|步骤|教程|参考食谱|制作|操作|tips?|小贴士|评论|收藏|点赞|打开小红书)/i.test(line)) return true;
-  if (/^(?:第?\s*)?[1-9]\d?\s*[\.、)：:)）-]/.test(line)) return true;
-  if (/^([1-9]|10)\uFE0F?\u20E3/.test(line) || /^[①②③④⑤⑥⑦⑧⑨⑩]/.test(line)) return true;
+  const plain = stripDecorativePrefix(line);
+  if (/^#/.test(plain)) return true;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(plain)) return true;
+  if (/^(做法|步骤|教程|参考食谱|制作|操作|tips?|小贴士|评论|收藏|点赞|打开小红书)/i.test(plain)) return true;
+  if (/^(?:第?\s*)?[1-9]\d?\s*[\.、)：:)）-]/.test(plain)) return true;
+  if (/^([1-9]|10)\uFE0F?\u20E3/.test(plain) || /^[①②③④⑤⑥⑦⑧⑨⑩]/.test(plain)) return true;
   return false;
 }
 
@@ -277,6 +296,7 @@ function isLikelyIngredient(value) {
   if (/^#/.test(value)) return false;
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   if (/^(做法|步骤|教程|参考食谱|制作|操作|tips?|小贴士)/i.test(value)) return false;
+  if (/(此配方|可做\s*\d+|份量|成品数量)/.test(value)) return false;
   return /[\u3400-\u9fffA-Za-z]/.test(value);
 }
 
