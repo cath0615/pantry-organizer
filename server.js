@@ -236,6 +236,9 @@ function extractIngredients(text) {
     if (isIngredientSectionEnd(line)) break;
     addIngredientCandidates(ingredients, line);
   }
+  if (!ingredients.length) {
+    ingredients.push(...extractMeasuredIngredients(text));
+  }
   return uniqueValues(ingredients).slice(0, 24);
 }
 
@@ -275,6 +278,51 @@ function isLikelyIngredient(value) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   if (/^(做法|步骤|教程|参考食谱|制作|操作|tips?|小贴士)/i.test(value)) return false;
   return /[\u3400-\u9fffA-Za-z]/.test(value);
+}
+
+function extractMeasuredIngredients(text) {
+  const normalized = String(text || "")
+    .replace(/@@STEP_\d{1,2}@@/g, " ")
+    .replace(/([1-9]|10)\uFE0F?\u20E3/g, " ")
+    .replace(/[①②③④⑤⑥⑦⑧⑨⑩]/g, " ")
+    .replace(/#\S+/g, " ")
+    .replace(/\s+/g, " ");
+  const ingredients = [];
+  const amountAfterName = /([\u3400-\u9fffA-Za-z][\u3400-\u9fffA-Za-z\s]{0,12}?)(\d+(?:-\d+)?(?:\.\d+)?\s*(?:g|kg|克|斤|ml|mL|毫升|升|颗|个|只|枚|片|根|条|块|勺|大勺|小勺|茶匙|汤匙|杯|碗|包|袋|盒|罐|撮|滴)|少许|适量)/gi;
+  const amountBeforeName = /((?:\d+(?:-\d+)?(?:\.\d+)?|[一二两三四五六七八九十半]+)\s*(?:g|kg|克|斤|ml|mL|毫升|升|颗|个|只|枚|片|根|条|块|勺|大勺|小勺|茶匙|汤匙|杯|碗|包|袋|盒|罐|撮|滴))\s*([\u3400-\u9fffA-Za-z][\u3400-\u9fffA-Za-z\s]{0,12})/gi;
+  collectMeasuredIngredientMatches(ingredients, normalized, amountAfterName, (match) => `${match[1].trim()} ${match[2].trim()}`);
+  collectMeasuredIngredientMatches(ingredients, normalized, amountBeforeName, (match) => `${match[2].trim()} ${match[1].trim()}`);
+  return ingredients;
+}
+
+function collectMeasuredIngredientMatches(ingredients, text, pattern, format) {
+  let match;
+  while ((match = pattern.exec(text))) {
+    const ingredient = cleanMeasuredIngredientText(format(match));
+    if (!isLikelyMeasuredIngredient(ingredient)) continue;
+    ingredients.push(ingredient);
+  }
+}
+
+function cleanMeasuredIngredientText(value) {
+  const normalized = cleanIngredientText(value)
+    .replace(/^(加|加入|放入|倒入|用|把|和|再|先|然后|最后|一份)/, "")
+    .trim();
+  const parts = normalized.split(/\s+/);
+  if (parts.length < 2) return normalized;
+  const amount = parts[parts.length - 1];
+  const name = parts
+    .slice(0, -1)
+    .join("")
+    .split(/用|加|放|倒|切|搅|揉|混|和|，|,/)[0]
+    .trim();
+  return name ? `${name} ${amount}` : normalized;
+}
+
+function isLikelyMeasuredIngredient(value) {
+  if (!isLikelyIngredient(value)) return false;
+  if (/(分钟|小时|度|烤|煮|炒|搅拌|打碎|揉|切|腌制|混合|均匀|流动|浓稠|省略)/.test(value)) return false;
+  return /\d|[一二两三四五六七八九十半]/.test(value);
 }
 
 function uniqueValues(values) {
