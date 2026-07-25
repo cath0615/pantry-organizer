@@ -67,6 +67,7 @@ const state = {
   recipeConfirmQueue: [],
   recipeConfirmTotal: 0,
   currentRecipeSourceText: "",
+  recipeDialogSnapshot: "",
   plannedRecipes: [],
   activeTab: "pantry",
   mealPlanner: {
@@ -268,7 +269,7 @@ function bindEvents() {
   on(els.exportRecipesButton, "click", exportRecipes);
   on(els.importRecipesInput, "change", importRecipes);
   on(els.recipeForm, "submit", handleRecipeSubmit);
-  on(els.recipeDialog, "cancel", cancelRecipeConfirmQueue);
+  on(els.recipeDialog, "cancel", handleRecipeDialogCancel);
   on(els.recipeList, "click", handleRecipeListAction);
   on(els.plannedRecipeList, "click", handlePlannedRecipeAction);
   on(els.plannedRecipeList, "input", updatePlannedRecipeDetails);
@@ -597,8 +598,37 @@ function openNextRecipeDraft() {
 }
 
 function closeRecipeDialog() {
+  if (!confirmRecipeDialogClose()) return;
   cancelRecipeConfirmQueue();
+  state.recipeDialogSnapshot = "";
   els.recipeDialog.close();
+}
+
+function handleRecipeDialogCancel(event) {
+  if (!confirmRecipeDialogClose()) {
+    event.preventDefault();
+    return;
+  }
+  cancelRecipeConfirmQueue();
+  state.recipeDialogSnapshot = "";
+}
+
+function getRecipeDialogValues() {
+  return JSON.stringify({
+    title: els.recipeTitle?.value || "",
+    url: els.recipeUrl?.value || "",
+    tags: getRecipeDialogTags(),
+    ingredients: els.recipeIngredients?.value || "",
+    steps: els.recipeSteps?.value || "",
+    notes: els.recipeNotes?.value || "",
+    coverData: els.recipeCoverData?.value || "",
+    coverFile: els.recipeCoverInput?.files?.[0]?.name || ""
+  });
+}
+
+function confirmRecipeDialogClose() {
+  if (!state.recipeDialogSnapshot || getRecipeDialogValues() === state.recipeDialogSnapshot) return true;
+  return window.confirm("当前菜谱有未保存的修改，确定要退出吗？退出后当前菜谱不会保存。批量确认也会停止。\n\n前面已经保存的菜谱不会受到影响。\n\n点击“取消”继续编辑，点击“确定”退出。");
 }
 
 function cancelRecipeConfirmQueue() {
@@ -1058,6 +1088,7 @@ function openRecipeDialog(recipe = null, options = {}) {
   setRecipeCoverPreview(recipe?.coverData || "");
   if (els.recipeCoverInput) els.recipeCoverInput.value = "";
   els.deleteRecipeButton.classList.toggle("is-hidden", !isEditing);
+  state.recipeDialogSnapshot = getRecipeDialogValues();
   els.recipeDialog.showModal();
   window.setTimeout(() => els.recipeTitle?.focus(), 80);
 }
@@ -1093,6 +1124,7 @@ async function handleRecipeSubmit(event) {
     clearRecipeLinkInput();
   }
   saveRecipes();
+  state.recipeDialogSnapshot = "";
   els.recipeDialog.close();
   renderRecipes();
   const isBatchConfirming = state.recipeConfirmTotal > 0;
