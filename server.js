@@ -156,10 +156,17 @@ function collapseDuplicatePostText(text, title = "") {
       occurrences.push(index);
       fromIndex = index + candidate.length;
     }
-    if (occurrences.length >= 2) return rawText.slice(occurrences[occurrences.length - 1]).trim();
+    if (occurrences.length >= 2) return removeTrailingPostMetadata(rawText.slice(occurrences[occurrences.length - 1]).trim());
   }
 
-  return rawText;
+  return removeTrailingPostMetadata(rawText);
+}
+
+function removeTrailingPostMetadata(text) {
+  let cleaned = String(text || "").trim();
+  cleaned = cleaned.replace(/\s+\d{4}[-/.]\d{1,2}[-/.]\d{1,2}\s*$/, "").trim();
+  cleaned = cleaned.replace(/(?:\s+#[^\s#]+)+\s*$/, "").trim();
+  return cleaned;
 }
 
 function cleanPostText(text) {
