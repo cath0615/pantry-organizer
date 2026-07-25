@@ -64,6 +64,9 @@ const state = {
   recipeTag: "all",
   recipeSort: "updatedDesc",
   recipeView: "library",
+  recipeConfirmQueue: [],
+  recipeConfirmTotal: 0,
+  currentRecipeSourceText: "",
   plannedRecipes: [],
   activeTab: "pantry",
   mealPlanner: {
@@ -265,11 +268,12 @@ function bindEvents() {
   on(els.exportRecipesButton, "click", exportRecipes);
   on(els.importRecipesInput, "change", importRecipes);
   on(els.recipeForm, "submit", handleRecipeSubmit);
+  on(els.recipeDialog, "cancel", cancelRecipeConfirmQueue);
   on(els.recipeList, "click", handleRecipeListAction);
   on(els.plannedRecipeList, "click", handlePlannedRecipeAction);
   on(els.plannedRecipeList, "input", updatePlannedRecipeDetails);
   on(els.deleteRecipeButton, "click", deleteCurrentRecipe);
-  on(els.closeRecipeDialogButton, "click", () => els.recipeDialog.close());
+  on(els.closeRecipeDialogButton, "click", closeRecipeDialog);
   on(els.recipeCoverInput, "change", handleRecipeCoverInput);
   on(els.removeRecipeCoverButton, "click", removeCurrentRecipeCover);
   on(els.addRecipeCategoryButton, "click", addRecipeCategoryFromDialog);
@@ -523,10 +527,9 @@ async function saveRecipeFromLinkInput() {
 }
 
 async function saveRecipeLinkBatch(text, urls) {
-  let added = 0;
+  const drafts = [];
   let skipped = 0;
   let failed = 0;
-  const importedIds = [];
   els.saveRecipeLinkButton.disabled = true;
 
   for (let index = 0; index < urls.length; index += 1) {
@@ -553,8 +556,8 @@ async function saveRecipeLinkBatch(text, urls) {
     const ingredients = preview.ingredients || "";
     const steps = preview.steps || "";
     const sourceText = preview.rawText || text;
-    const recipe = normalizeRecipe({
-      id: createId(),
+    drafts.push({
+      id: "",
       title,
       url: finalUrl,
       tags: inferRecipeTags({ title, ingredients, steps, sourceText }),
@@ -563,27 +566,46 @@ async function saveRecipeLinkBatch(text, urls) {
       notes: "",
       coverData: preview.coverData || "",
       sourceText,
-      createdAt: now,
-      updatedAt: now
+      createdAt: now
     });
-    state.recipes.unshift(recipe);
-    importedIds.push(recipe.id);
-    added += 1;
   }
 
   els.saveRecipeLinkButton.disabled = false;
-  if (added) {
-    saveRecipes();
+  if (drafts.length) {
     clearRecipeLinkInput();
-    state.recipeQuery = "";
-    if (els.recipeSearchInput) els.recipeSearchInput.value = "";
-    state.recipeTag = "all";
-    state.recipeSort = "updatedDesc";
-    if (els.recipeSortSelect) els.recipeSortSelect.value = state.recipeSort;
-    renderRecipes();
-    highlightImportedRecipes(importedIds);
+    startRecipeConfirmQueue(drafts);
+    showToast(`抓取完成：待确认 ${drafts.length}，重复 ${skipped}，失败 ${failed}`);
+    return;
   }
-  showToast(`批量完成：新增 ${added}，重复 ${skipped}，失败 ${failed}`);
+  showToast(`批量完成：新增 0，重复 ${skipped}，失败 ${failed}`);
+}
+
+function startRecipeConfirmQueue(drafts) {
+  state.recipeConfirmQueue = [...drafts];
+  state.recipeConfirmTotal = drafts.length;
+  openNextRecipeDraft();
+}
+
+function openNextRecipeDraft() {
+  const draft = state.recipeConfirmQueue.shift();
+  if (!draft) {
+    state.recipeConfirmTotal = 0;
+    return;
+  }
+  const current = state.recipeConfirmTotal - state.recipeConfirmQueue.length;
+  openRecipeDialog(draft, { title: `确认菜谱 ${current}/${state.recipeConfirmTotal}` });
+}
+
+function closeRecipeDialog() {
+  cancelRecipeConfirmQueue();
+  els.recipeDialog.close();
+}
+
+function cancelRecipeConfirmQueue() {
+  if (!state.recipeConfirmQueue.length) return;
+  state.recipeConfirmQueue = [];
+  state.recipeConfirmTotal = 0;
+  showToast("已停止批量确认");
 }
 
 async function fetchRecipePreview(url, options = {}) {
@@ -1013,13 +1035,14 @@ function formatShortDate(value) {
   return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
-function openRecipeDialog(recipe = null) {
+function openRecipeDialog(recipe = null, options = {}) {
   const isEditing = Boolean(recipe?.id);
   const isDraftFromLink = Boolean(recipe && recipe.url && !recipe.id);
-  els.recipeDialogTitle.textContent = isDraftFromLink ? "确认菜谱" : isEditing ? "编辑菜谱" : "手动添加";
+  els.recipeDialogTitle.textContent = options.title || (isDraftFromLink ? "确认菜谱" : isEditing ? "编辑菜谱" : "手动添加");
   els.recipeId.value = recipe?.id || "";
   els.recipeTitle.value = recipe?.title || "";
   els.recipeUrl.value = recipe?.url || "";
+  state.currentRecipeSourceText = recipe?.sourceText || "";
   setRecipeDialogTags(recipe?.tags || []);
   if (els.recipeCategoryInput) els.recipeCategoryInput.value = "";
   els.recipeIngredients.value = recipe?.ingredients || "";
@@ -1046,7 +1069,7 @@ async function handleRecipeSubmit(event) {
     steps: els.recipeSteps.value,
     notes: els.recipeNotes.value,
     coverData: els.recipeCoverData.value,
-    sourceText: existing?.sourceText || "",
+    sourceText: existing?.sourceText || state.currentRecipeSourceText || els.recipeLinkInput?.value.trim() || "",
     doneCount: existing?.doneCount || 0,
     lastCookedAt: existing?.lastCookedAt || "",
     createdAt: existing?.createdAt || new Date().toISOString()
@@ -1065,7 +1088,16 @@ async function handleRecipeSubmit(event) {
   saveRecipes();
   els.recipeDialog.close();
   renderRecipes();
-  showToast("菜谱已保存");
+  const isBatchConfirming = state.recipeConfirmTotal > 0;
+  if (state.recipeConfirmQueue.length) {
+    showToast(`已保存，剩余 ${state.recipeConfirmQueue.length} 个待确认`);
+    window.setTimeout(openNextRecipeDraft, 120);
+  } else if (isBatchConfirming) {
+    state.recipeConfirmTotal = 0;
+    showToast("批量确认完成");
+  } else {
+    showToast("菜谱已保存");
+  }
 }
 
 function setRecipeDialogTags(tags) {
