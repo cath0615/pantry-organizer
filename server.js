@@ -114,7 +114,7 @@ async function handleXhsPreview(req, res) {
   const result = await readXhsWithPlaywright(url, { sourceType: "article", settleMs: 6000 });
   const coverUrl = pickPrimaryImages(result.media, 1)[0] || "";
   const coverData = coverUrl ? await imageUrlToDataUrl(coverUrl).catch(() => "") : "";
-  const recipeText = extractRecipeText(result.text || "");
+  const recipeText = extractRecipeText(result.text || "", result.title || "");
   sendJson(res, 200, {
     ok: Boolean(result.ok || result.title || coverData),
     title: cleanPreviewTitle(result.title || ""),
@@ -128,13 +128,38 @@ async function handleXhsPreview(req, res) {
   });
 }
 
-function extractRecipeText(text) {
-  const rawText = String(text || "").trim();
+function extractRecipeText(text, title = "") {
+  const rawText = collapseDuplicatePostText(text, title);
   return {
     ingredients: "",
     steps: rawText,
     rawText
   };
+}
+
+function collapseDuplicatePostText(text, title = "") {
+  const rawText = String(text || "").trim();
+  if (!rawText) return "";
+
+  const firstLine = rawText.split(/\r?\n/).map((line) => line.trim()).find(Boolean) || "";
+  const titleCandidates = [
+    String(title || "").replace(/\s*-\s*小红书.*$/i, "").trim(),
+    firstLine.replace(/\s*-\s*小红书.*$/i, "").trim()
+  ].filter((value) => value.length >= 6);
+
+  for (const candidate of titleCandidates) {
+    const occurrences = [];
+    let fromIndex = 0;
+    while (fromIndex < rawText.length) {
+      const index = rawText.indexOf(candidate, fromIndex);
+      if (index < 0) break;
+      occurrences.push(index);
+      fromIndex = index + candidate.length;
+    }
+    if (occurrences.length >= 2) return rawText.slice(occurrences[occurrences.length - 1]).trim();
+  }
+
+  return rawText;
 }
 
 function cleanPostText(text) {
