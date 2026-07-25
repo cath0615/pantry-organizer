@@ -129,10 +129,10 @@ async function handleXhsPreview(req, res) {
 }
 
 function extractRecipeText(text) {
-  const rawText = cleanPostText(text);
+  const rawText = String(text || "").trim();
   return {
-    ingredients: extractIngredients(rawText).join("\n"),
-    steps: extractNumberedSteps(rawText).join("\n"),
+    ingredients: "",
+    steps: rawText,
     rawText
   };
 }

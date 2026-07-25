@@ -1082,7 +1082,7 @@ function openRecipeDialog(recipe = null, options = {}) {
   state.currentRecipeSourceText = recipe?.sourceText || "";
   setRecipeDialogTags(recipe?.tags || []);
   if (els.recipeCategoryInput) els.recipeCategoryInput.value = "";
-  els.recipeIngredients.value = recipe?.ingredients || "";
+  if (els.recipeIngredients) els.recipeIngredients.value = recipe?.ingredients || "";
   els.recipeSteps.value = recipe?.steps || "";
   els.recipeNotes.value = recipe?.notes || "";
   setRecipeCoverPreview(recipe?.coverData || "");
@@ -1103,7 +1103,7 @@ async function handleRecipeSubmit(event) {
     title: els.recipeTitle.value,
     url: els.recipeUrl.value,
     tags: getRecipeDialogTags(),
-    ingredients: els.recipeIngredients.value,
+    ingredients: els.recipeIngredients?.value || "",
     steps: els.recipeSteps.value,
     notes: els.recipeNotes.value,
     coverData: els.recipeCoverData.value,
