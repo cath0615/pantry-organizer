@@ -174,7 +174,7 @@ function extractNumberedSteps(text) {
     if (index > 0 && marker.number !== expected) break;
     const end = index + 1 < markers.length ? markers[index + 1].start : normalized.length;
     const step = cleanStepText(normalized.slice(marker.contentStart, end));
-    if (isLikelyStep(step)) steps.push(step);
+    if (isLikelyStep(step)) steps.push(`${marker.number}. ${step}`);
     expected += 1;
   }
   return uniqueValues(steps).slice(0, 18);
@@ -221,18 +221,60 @@ function extractIngredients(text) {
   const lines = String(text || "")
     .split(/\n|。|；|;/)
     .map((line) => line.trim())
-    .filter(Boolean);
+    .filter((line) => line && line !== "ㅤ");
   const ingredients = [];
-  for (const line of lines) {
-    if (!/^(材料|食材|调料|配料|用料|准备)[：:\s]/.test(line)) continue;
-    const normalized = line.replace(/^(材料|食材|调料|配料|用料|准备)[：:\s]*/, "").trim();
-    for (const item of normalized.split(/[，,、]/)) {
-      const ingredient = item.trim();
-      if (ingredient.length < 2 || ingredient.length > 80) continue;
-      ingredients.push(ingredient);
+  let inIngredientSection = false;
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/^[-*•]\s*/, "").trim();
+    if (isIngredientSectionStart(line)) {
+      inIngredientSection = true;
+      const inline = line.replace(/^(材料|食材|调料|配料|用料|准备)[：:\s]*/, "").trim();
+      if (inline) addIngredientCandidates(ingredients, inline);
+      continue;
     }
+    if (!inIngredientSection) continue;
+    if (isIngredientSectionEnd(line)) break;
+    addIngredientCandidates(ingredients, line);
   }
   return uniqueValues(ingredients).slice(0, 24);
+}
+
+function isIngredientSectionStart(line) {
+  return /^(材料|食材|调料|配料|用料|准备)[：:\s]*$/.test(line) || /^(材料|食材|调料|配料|用料|准备)[：:\s]/.test(line);
+}
+
+function isIngredientSectionEnd(line) {
+  if (!line) return true;
+  if (/^#/.test(line)) return true;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(line)) return true;
+  if (/^(做法|步骤|教程|参考食谱|制作|操作|tips?|小贴士|评论|收藏|点赞|打开小红书)/i.test(line)) return true;
+  if (/^(?:第?\s*)?[1-9]\d?\s*[\.、)：:)）-]/.test(line)) return true;
+  if (/^([1-9]|10)\uFE0F?\u20E3/.test(line) || /^[①②③④⑤⑥⑦⑧⑨⑩]/.test(line)) return true;
+  return false;
+}
+
+function addIngredientCandidates(ingredients, value) {
+  const normalized = String(value || "").replace(/^(材料|食材|调料|配料|用料|准备)[：:\s]*/, "").trim();
+  for (const item of normalized.split(/[，,、]/)) {
+    const ingredient = cleanIngredientText(item);
+    if (!isLikelyIngredient(ingredient)) continue;
+    ingredients.push(ingredient);
+  }
+}
+
+function cleanIngredientText(value) {
+  return String(value || "")
+    .replace(/^[-*•]\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isLikelyIngredient(value) {
+  if (!value || value.length < 2 || value.length > 80) return false;
+  if (/^#/.test(value)) return false;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  if (/^(做法|步骤|教程|参考食谱|制作|操作|tips?|小贴士)/i.test(value)) return false;
+  return /[\u3400-\u9fffA-Za-z]/.test(value);
 }
 
 function uniqueValues(values) {

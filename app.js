@@ -818,8 +818,15 @@ function highlightImportedRecipes(ids) {
 
 function handleRecipeListAction(event) {
   const button = event.target.closest("button[data-plan-recipe]");
-  if (!button) return;
-  addRecipeToPlan(button.dataset.planRecipe);
+  if (button) {
+    addRecipeToPlan(button.dataset.planRecipe);
+    return;
+  }
+  if (event.target.closest("button, a, input, textarea, select, label")) return;
+  const card = event.target.closest("[data-recipe-id]");
+  if (!card) return;
+  const recipe = state.recipes.find((item) => item.id === card.dataset.recipeId);
+  if (recipe) openRecipeDialog(recipe);
 }
 
 function addRecipeToPlan(recipeId) {

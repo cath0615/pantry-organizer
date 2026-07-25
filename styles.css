@@ -527,6 +527,7 @@ select:focus {
   display: grid;
   grid-template-columns: 86px 1fr;
   gap: 12px;
+  cursor: pointer;
 }
 
 .recipe-card.is-newly-imported {
