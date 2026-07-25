@@ -33,7 +33,7 @@ const MEAL_SLOTS = [
 ];
 const RECIPE_TAG_RULES = [
   { tag: "低卡", pattern: /低卡|低脂|低糖|无糖|0糖|零糖|无油|0油|少油|减脂|减肥|轻食|高蛋白|生酮|控糖/i },
-  { tag: "甜品", pattern: /甜品|甜点|蛋糕|布丁|慕斯|毛巾卷|司康|曲奇|饼干|派|挞|提拉米苏|奶冻|雪媚娘|千层|巴斯克|芝士蛋糕|可丽饼|松饼|舒芙蕾/i },
+  { tag: "甜品", pattern: /甜品|甜点|蛋糕|布丁|慕斯|毛巾卷|米糕|发糕|年糕|糕点|麻薯|糯米糍|司康|曲奇|饼干|派|挞|提拉米苏|奶冻|雪媚娘|千层|巴斯克|芝士蛋糕|可丽饼|松饼|舒芙蕾/i },
   { tag: "面包", pattern: /面包|吐司|贝果|欧包|餐包|佛卡夏|碱水|可颂|牛角包|法棍|sourdough|bagel/i },
   { tag: "鸡肉", pattern: /鸡肉|鸡腿|鸡胸|鸡翅|鸡爪|鸡丁|鸡排|鸡块|鸡柳|鸡胗|鸡肝|整鸡|半鸡|chicken/i },
   { tag: "牛肉", pattern: /牛肉|牛腩|牛排|牛仔骨|肥牛|牛肋|牛舌|牛尾|牛柳|牛丸|牛筋|牛百叶|牛杂|beef|short ribs?/i },
@@ -517,7 +517,7 @@ async function saveRecipeFromLinkInput() {
     id: existing?.id || "",
     title: draftTitle,
     url: preview?.finalUrl || url,
-    tags: existing?.tags || inferRecipeTags({ title: draftTitle, ingredients: draftIngredients, steps: draftSteps, sourceText: draftSourceText }),
+    tags: existing?.tags?.length ? existing.tags : inferRecipeTags({ title: draftTitle, ingredients: draftIngredients, steps: draftSteps, sourceText: draftSourceText }),
     ingredients: draftIngredients,
     steps: draftSteps,
     notes: existing?.notes || "",
