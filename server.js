@@ -168,11 +168,15 @@ function extractNumberedSteps(text) {
   if (markers.length < 2) return [];
 
   const steps = [];
+  const seenSteps = new Set();
   for (let index = 0; index < markers.length; index += 1) {
     const marker = markers[index];
     const end = index + 1 < markers.length ? markers[index + 1].start : normalized.length;
     const step = cleanStepText(normalized.slice(marker.contentStart, end));
-    if (isLikelyStep(step)) steps.push(`${steps.length + 1}. ${step}`);
+    const stepKey = step.replace(/\s+/g, " ").trim();
+    if (!isLikelyStep(step) || seenSteps.has(stepKey)) continue;
+    seenSteps.add(stepKey);
+    steps.push(`${steps.length + 1}. ${step}`);
   }
   return uniqueValues(steps).slice(0, 18);
 }
@@ -201,7 +205,15 @@ function cleanStepText(value) {
     .replace(/@@STEP_\d{1,2}@@/g, "")
     .split(/\s+#/)[0]
     .split(/\n\d{4}-\d{2}-\d{2}/)[0];
-  return withoutMarkers
+  const withoutRepeatedRecipeBlock = withoutMarkers.replace(
+    /[。！？][ \t]+[^\u3400-\u9fffA-Za-z0-9\s]{1,4}(?=[\u3400-\u9fff])/g,
+    (match) => match.slice(0, 1)
+  );
+  const headingIndex = withoutRepeatedRecipeBlock.search(
+    /(?:\n|\\n)\s*[^。！？\n]{0,60}(?:馅料|糯米皮|米皮|饼皮|面团|内馅|夹心|酱汁|食材|材料|用料)/
+  );
+  const cleaned = headingIndex >= 0 ? withoutRepeatedRecipeBlock.slice(0, headingIndex) : withoutRepeatedRecipeBlock;
+  return cleaned
     .replace(/\s+/g, " ")
     .replace(/^[：:，,、。；;\s-]+/, "")
     .replace(/[ \t]+([，。；])/g, "$1")
@@ -234,9 +246,15 @@ function extractIngredients(text) {
     addIngredientCandidates(ingredients, line);
   }
   if (!ingredients.length) {
-    ingredients.push(...extractMeasuredIngredients(text));
+    ingredients.push(...extractMeasuredIngredients(extractTextBeforeFirstStep(text)));
   }
   return uniqueValues(ingredients).slice(0, 24);
+}
+
+function extractTextBeforeFirstStep(text) {
+  const normalized = normalizeStepMarkers(text);
+  const markerIndex = normalized.indexOf("@@STEP_");
+  return markerIndex >= 0 ? normalized.slice(0, markerIndex) : normalized;
 }
 
 function isIngredientSectionStart(line) {
