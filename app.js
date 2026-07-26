@@ -819,7 +819,6 @@ function renderRecipeCard(recipe) {
       <button class="recipe-title-button" type="button"></button>
       <div class="recipe-tags"></div>
       <p class="recipe-meta-line"></p>
-      <p class="recipe-summary"></p>
       <div class="recipe-card-actions">
         <button class="ghost-button compact" type="button" data-plan-recipe="${recipe.id}">准备做</button>
         <a class="recipe-link" target="_blank" rel="noopener">打开链接</a>
@@ -849,12 +848,8 @@ function renderRecipeCard(recipe) {
   tags.classList.toggle("is-hidden", !recipe.tags?.length);
   const metaLine = card.querySelector(".recipe-meta-line");
   const doneCount = Number(recipe.doneCount || 0);
-  const lastCooked = recipe.lastCookedAt ? formatShortDate(recipe.lastCookedAt) : "";
-  metaLine.textContent = doneCount ? `做过 ${doneCount} 次${lastCooked ? ` · 最近 ${lastCooked}` : ""}` : "还没记录做过";
-  const summary = [recipe.ingredients, recipe.notes, recipe.steps].filter(Boolean).join(" · ");
-  const summaryElement = card.querySelector(".recipe-summary");
-  summaryElement.textContent = summary.slice(0, 120);
-  summaryElement.classList.toggle("is-hidden", !summary);
+  metaLine.textContent = doneCount ? `做过 ${doneCount} 次` : "";
+  metaLine.classList.toggle("is-hidden", !doneCount);
   const link = card.querySelector(".recipe-link");
   link.href = recipe.url || "#";
   link.classList.toggle("is-hidden", !recipe.url);
