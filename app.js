@@ -1,6 +1,7 @@
 const DB_NAME = "pantry-organizer";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = "items";
+const RECIPES_STORE_NAME = "recipes";
 const DEFAULT_CATEGORIES = ["调料", "干货", "速食", "零食", "冷藏", "冷冻", "罐头", "烘焙", "饮品", "其他"];
 const DEFAULT_LOCATIONS = ["方便面柜", "零食柜", "工具柜", "烘焙柜", "储物柜", "调料柜", "冰箱"];
 const QUANTITY_UNITS = "瓶|包|袋|罐|盒|个|斤|克|g|kg|ml|l|升|毫升|板|条|片|块|枚|根|支|箱|组|套|杯";
@@ -197,12 +198,12 @@ async function init() {
   loadSyncSettings();
   renderMealPlanner();
   loadMealPlanner();
-  loadRecipes();
   loadPlannedRecipes();
   bindEvents();
   setupSpeech();
   setupServiceWorker();
   await initStorage();
+  await loadRecipes();
   await loadItems();
   syncCategoriesFromItems();
   syncLocationsFromItems();
@@ -443,17 +444,41 @@ function mealKey(day, meal) {
   return `${day}:${meal}`;
 }
 
-function loadRecipes() {
+async function loadRecipes() {
+  if (!state.fallback && state.db?.objectStoreNames.contains(RECIPES_STORE_NAME)) {
+    const saved = await storeRequestFor(RECIPES_STORE_NAME, "readonly", (store) => store.getAll());
+    if (saved.length) {
+      state.recipes = saved.map(normalizeRecipe).filter((recipe) => recipe.title);
+      return;
+    }
+  }
+
   try {
     const saved = JSON.parse(localStorage.getItem(RECIPES_KEY) || "[]");
     state.recipes = Array.isArray(saved) ? saved.map(normalizeRecipe).filter((recipe) => recipe.title) : [];
+    if (state.recipes.length && !state.fallback && state.db?.objectStoreNames.contains(RECIPES_STORE_NAME)) {
+      await saveRecipes();
+      localStorage.removeItem(RECIPES_KEY);
+    }
   } catch {
     state.recipes = [];
   }
 }
 
-function saveRecipes() {
-  localStorage.setItem(RECIPES_KEY, JSON.stringify(state.recipes));
+async function saveRecipes() {
+  try {
+    if (!state.fallback && state.db?.objectStoreNames.contains(RECIPES_STORE_NAME)) {
+      await storeRequestFor(RECIPES_STORE_NAME, "readwrite", (store) => {
+        store.clear();
+        for (const recipe of state.recipes) store.put(recipe);
+      });
+      return;
+    }
+    localStorage.setItem(RECIPES_KEY, JSON.stringify(state.recipes));
+  } catch (error) {
+    if (error?.name === "QuotaExceededError") showToast("手机本地空间不足，请删除旧备份或清理浏览器数据");
+    else showToast("菜谱保存失败");
+  }
 }
 
 function loadPlannedRecipes() {
@@ -1328,6 +1353,9 @@ async function initStorage() {
           store.createIndex("expireDate", "expireDate", { unique: false });
           store.createIndex("category", "category", { unique: false });
         }
+        if (!db.objectStoreNames.contains(RECIPES_STORE_NAME)) {
+          db.createObjectStore(RECIPES_STORE_NAME, { keyPath: "id" });
+        }
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
@@ -1378,12 +1406,22 @@ async function removeItem(id) {
 }
 
 function storeRequest(mode, action) {
+  return storeRequestFor(STORE_NAME, mode, action);
+}
+
+function storeRequestFor(storeName, mode, action) {
   return new Promise((resolve, reject) => {
-    const tx = state.db.transaction(STORE_NAME, mode);
-    const store = tx.objectStore(STORE_NAME);
+    const tx = state.db.transaction(storeName, mode);
+    const store = tx.objectStore(storeName);
     const request = action(store);
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    if (request?.onsuccess !== undefined) {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    } else {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error("IndexedDB transaction aborted"));
+    }
   });
 }
 
