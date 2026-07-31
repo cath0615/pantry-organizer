@@ -546,7 +546,7 @@ async function saveRecipeFromLinkInput() {
     showToast("正在抓取封面和步骤");
     preview = await fetchRecipePreview(url);
   }
-  const draftTitle = preview?.title || existing?.title || extractRecipeTitle(text) || "未命名菜谱";
+  const draftTitle = existing?.title || preview?.title || extractRecipeTitle(text) || "未命名菜谱";
   const draftIngredients = preview ? preview.ingredients || "" : existing?.ingredients || "";
   const draftSteps = preview?.steps || existing?.steps || "";
   const draftSourceText = preview?.rawText || existing?.sourceText || text;
@@ -600,7 +600,7 @@ async function saveRecipeLinkBatch(text, urls) {
       existing = duplicate;
     }
     const now = new Date().toISOString();
-    const title = preview.title || existing?.title || extractRecipeTitle(text) || "未命名菜谱";
+    const title = existing?.title || preview.title || extractRecipeTitle(text) || "未命名菜谱";
     const ingredients = preview.ingredients || "";
     const steps = preview.steps || "";
     const sourceText = preview.rawText || text;
