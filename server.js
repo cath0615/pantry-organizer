@@ -168,12 +168,9 @@ async function handleXhsLikedRecipes(req, res) {
   try {
     const options = {
       headless: false,
-      viewport: { width: 390, height: 844 },
-      isMobile: true,
-      hasTouch: true,
+      viewport: { width: 1440, height: 900 },
       locale: "zh-CN",
       timezoneId: "Asia/Shanghai",
-      userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
       args: ["--disable-blink-features=AutomationControlled", "--no-first-run", "--disable-dev-shm-usage"]
     };
     if (xhsLikedSession?.context) {
@@ -191,7 +188,7 @@ async function handleXhsLikedRecipes(req, res) {
 
     let clickedLiked = await page.evaluate(() => {
       const candidates = [...document.querySelectorAll("*")];
-      const element = candidates.find((node) => node.textContent?.trim() === "赞过");
+      const element = candidates.find((node) => ["点赞", "赞过"].includes(node.textContent?.trim()));
       if (!element) return false;
       element.click();
       return true;
@@ -203,16 +200,33 @@ async function handleXhsLikedRecipes(req, res) {
         await page.waitForTimeout(2500);
         clickedLiked = await page.evaluate(() => {
           const candidates = [...document.querySelectorAll("*")];
-          const element = candidates.find((node) => node.textContent?.trim() === "赞过");
+          const element = candidates.find((node) => ["点赞", "赞过"].includes(node.textContent?.trim()));
           if (!element) return false;
           element.click();
           return true;
         });
       }
     }
-    if (clickedLiked) {
-      await page.waitForTimeout(2500);
+    if (!clickedLiked) {
+      await page.goto("https://www.xiaohongshu.com/explore", {
+        waitUntil: "domcontentloaded",
+        timeout: 60_000
+      });
+      await page.waitForTimeout(2000);
+      const loginButton = page.getByText("登录", { exact: true }).first();
+      if (await loginButton.count()) {
+        await loginButton.click().catch(() => {});
+        await page.waitForTimeout(1000);
+      }
+      keepSessionOpen = true;
+      sendJson(res, 200, {
+        ok: false,
+        needsLogin: true,
+        error: "抓取窗口尚未登录。请在弹出的桌面版小红书完成扫码或手机号登录，然后再点击一次抓取点赞。"
+      });
+      return;
     }
+    await page.waitForTimeout(2500);
 
     const items = new Map();
     for (let attempt = 0; attempt < 8 && items.size < limit; attempt += 1) {
@@ -232,7 +246,7 @@ async function handleXhsLikedRecipes(req, res) {
 
     if (!items.size) {
       keepSessionOpen = true;
-      sendJson(res, 200, { ok: false, needsLogin: true, error: "没有找到点赞列表。请在弹出的浏览器窗口登录小红书，然后再点击一次抓取点赞。" });
+      sendJson(res, 200, { ok: false, needsLogin: true, error: "没有找到点赞列表。请确认弹出的桌面版小红书已登录并能看到“笔记 / 收藏 / 点赞”，然后再点击一次抓取点赞。" });
       return;
     }
     sendJson(res, 200, { ok: true, items: [...items.values()].slice(0, limit) });
