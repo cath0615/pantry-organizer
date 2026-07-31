@@ -1276,18 +1276,25 @@ function getSelectedRecipeImageOptions() {
 
 async function loadSelectedRecipeImages() {
   const selected = getSelectedRecipeImageOptions();
-  if (!selected.length) return;
+  if (!selected.length) return 0;
   try {
     const response = await fetch(getRecipeImageDataEndpoint(), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ urls: selected.map((item) => item.url) })
     });
-    if (!response.ok) return;
+    if (!response.ok) {
+      showToast("附加图片下载失败，其他内容仍可保存");
+      return 0;
+    }
     const data = await response.json();
-    state.currentRecipePhotos.push(...(Array.isArray(data.photos) ? data.photos : []));
+    const photos = Array.isArray(data.photos) ? data.photos : [];
+    state.currentRecipePhotos.push(...photos);
+    if (photos.length < selected.length) showToast(`只保存了 ${photos.length}/${selected.length} 张附加图片`);
+    return photos.length;
   } catch {
     showToast("附加图片保存失败，其他内容仍可保存");
+    return 0;
   }
 }
 
