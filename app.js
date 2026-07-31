@@ -114,6 +114,8 @@ const els = {
   recipeSubTabs: $("recipeSubTabs"),
   saveRecipeLinkButton: $("saveRecipeLinkButton"),
   clearRecipeLinkButton: $("clearRecipeLinkButton"),
+  likedRecipeLimit: $("likedRecipeLimit"),
+  fetchLikedRecipesButton: $("fetchLikedRecipesButton"),
   addRecipeButton: $("addRecipeButton"),
   recipeSearchInput: $("recipeSearchInput"),
   recipeTagFilter: $("recipeTagFilter"),
@@ -258,6 +260,7 @@ function bindEvents() {
   on(els.clearMealIdeasButton, "click", clearMealIdeas);
   on(els.clearShoppingNoteButton, "click", clearShoppingNote);
   on(els.saveRecipeLinkButton, "click", saveRecipeFromLinkInput);
+  on(els.fetchLikedRecipesButton, "click", fetchLikedRecipes);
   on(els.recipeSubTabs, "click", switchRecipeView);
   on(els.clearRecipeLinkButton, "click", clearRecipeLinkInput);
   on(els.addRecipeButton, "click", () => openRecipeDialog());
@@ -571,6 +574,36 @@ async function saveRecipeFromLinkInput() {
     sourceText: draftSourceText
   });
   showToast(existing && preview ? "重新抓取完成，保存后会更新原菜谱" : existing ? "已打开已有菜谱" : "确认后保存");
+}
+
+async function fetchLikedRecipes() {
+  const limit = Math.max(1, Math.min(Number(els.likedRecipeLimit?.value) || 10, 30));
+  if (els.fetchLikedRecipesButton) els.fetchLikedRecipesButton.disabled = true;
+  showToast(`正在读取点赞列表前 ${limit} 个`);
+  try {
+    const response = await fetch(getLikedRecipesEndpoint(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ limit })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok || !Array.isArray(data.items) || !data.items.length) {
+      showToast(data.error || "没有找到点赞帖子");
+      return;
+    }
+    const urls = data.items.map((item) => item.url).filter(Boolean);
+    showToast(`找到 ${urls.length} 个点赞帖子，开始逐个确认`);
+    await saveRecipeLinkBatch(data.items.map((item) => `${item.title || ""} ${item.url}`).join("\n"), urls);
+  } catch {
+    showToast("读取点赞失败，请确认 npm start 和小红书登录状态");
+  } finally {
+    if (els.fetchLikedRecipesButton) els.fetchLikedRecipesButton.disabled = false;
+  }
+}
+
+function getLikedRecipesEndpoint() {
+  if (["localhost", "127.0.0.1"].includes(window.location.hostname)) return `${window.location.origin}/api/xhs-liked`;
+  return "http://127.0.0.1:5173/api/xhs-liked";
 }
 
 async function saveRecipeLinkBatch(text, urls) {

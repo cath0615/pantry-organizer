@@ -162,6 +162,13 @@
               <button class="primary-button" id="saveRecipeLinkButton" type="button">抓取保存</button>
               <button class="ghost-button" id="clearRecipeLinkButton" type="button">清空</button>
             </div>
+            <div class="liked-recipe-actions">
+              <label>
+                点赞数量
+                <input id="likedRecipeLimit" type="number" min="1" max="30" value="10" />
+              </label>
+              <button class="ghost-button" id="fetchLikedRecipesButton" type="button">抓取我的点赞</button>
+            </div>
           </section>
 
           <section class="recipe-toolbar" aria-label="菜谱筛选">
@@ -399,6 +406,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=57" type="module"></script>
+    <script src="./app.js?v=58" type="module"></script>
   </body>
 </html>

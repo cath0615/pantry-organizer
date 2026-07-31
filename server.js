@@ -6,7 +6,15 @@ const path = require("path");
 const PORT = Number(process.env.PORT || 5173);
 const PUBLIC_DIR = __dirname;
 const XHS_PROJECT_DIR = process.env.XHS_READER_DIR || "/Users/josh/Documents/Codex/2026-06-26/wo";
-const { readXhsWithPlaywright } = require(path.join(XHS_PROJECT_DIR, "xhs-reader"));
+const { readXhsWithPlaywright, PROFILE_DIR, SYSTEM_CHROME_PATH } = require(path.join(XHS_PROJECT_DIR, "xhs-reader"));
+
+function getXhsPlaywright() {
+  try {
+    return require(path.join(XHS_PROJECT_DIR, "node_modules", "playwright"));
+  } catch {
+    return null;
+  }
+}
 
 function pickPrimaryImages(media, limit = 40) {
   const seen = new Set();
@@ -141,6 +149,83 @@ async function handleXhsImageData(req, res) {
     if (data) photos.push(data);
   }
   sendJson(res, 200, { ok: true, photos });
+}
+
+async function handleXhsLikedRecipes(req, res) {
+  const payload = await readBody(req);
+  const limit = Math.max(1, Math.min(Number(payload.limit) || 10, 30));
+  const playwright = getXhsPlaywright();
+  if (!playwright) {
+    sendJson(res, 500, { ok: false, error: "Playwright is not installed" });
+    return;
+  }
+
+  let context;
+  try {
+    const options = {
+      headless: false,
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+      locale: "zh-CN",
+      timezoneId: "Asia/Shanghai",
+      userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+      args: ["--disable-blink-features=AutomationControlled", "--no-first-run", "--disable-dev-shm-usage"]
+    };
+    context = await playwright.chromium.launchPersistentContext(PROFILE_DIR, {
+      ...options,
+      executablePath: fs.existsSync(SYSTEM_CHROME_PATH) ? SYSTEM_CHROME_PATH : undefined
+    });
+    const page = context.pages()[0] || (await context.newPage());
+    await page.goto("https://www.xiaohongshu.com/", { waitUntil: "domcontentloaded", timeout: 60_000 });
+    await page.waitForTimeout(3000);
+
+    const profileLink = page.locator('a[href*="/user/profile/"], a[href*="/user/"]').first();
+    if (await profileLink.count()) {
+      await profileLink.click().catch(() => {});
+      await page.waitForTimeout(2500);
+    }
+
+    let likedLink = page.getByText("赞过", { exact: true }).first();
+    if (!(await likedLink.count())) {
+      const mineLink = page.getByText("我", { exact: true }).first();
+      if (await mineLink.count()) {
+        await mineLink.click().catch(() => {});
+        await page.waitForTimeout(2500);
+      }
+      likedLink = page.getByText("赞过", { exact: true }).first();
+    }
+    if (await likedLink.count()) {
+      await likedLink.click().catch(() => {});
+      await page.waitForTimeout(2500);
+    }
+
+    const items = new Map();
+    for (let attempt = 0; attempt < 8 && items.size < limit; attempt += 1) {
+      const found = await page.locator('a[href*="/discovery/item/"]').evaluateAll((anchors) => anchors.map((anchor) => ({
+        url: anchor.href,
+        title: (anchor.innerText || anchor.getAttribute("aria-label") || "").trim()
+      })));
+      for (const item of found) {
+        if (!item.url || items.has(item.url)) continue;
+        items.set(item.url, item);
+        if (items.size >= limit) break;
+      }
+      if (items.size >= limit) break;
+      await page.mouse.wheel(0, 800).catch(() => {});
+      await page.waitForTimeout(900);
+    }
+
+    if (!items.size) {
+      sendJson(res, 200, { ok: false, error: "没有找到点赞列表，请确认浏览器 profile 已登录小红书，并手动打开过点赞页面" });
+      return;
+    }
+    sendJson(res, 200, { ok: true, items: [...items.values()].slice(0, limit) });
+  } catch (error) {
+    sendJson(res, 500, { ok: false, error: error.message || "读取点赞列表失败" });
+  } finally {
+    if (context) await context.close().catch(() => {});
+  }
 }
 
 function extractRecipeText(text, title = "") {
@@ -479,6 +564,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "POST" && parsed.pathname === "/api/xhs-image-data") {
       await handleXhsImageData(req, res);
+      return;
+    }
+    if (req.method === "POST" && parsed.pathname === "/api/xhs-liked") {
+      await handleXhsLikedRecipes(req, res);
       return;
     }
     serveStatic(req, res);
