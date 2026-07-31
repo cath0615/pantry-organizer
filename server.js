@@ -8,6 +8,7 @@ const PUBLIC_DIR = __dirname;
 const XHS_PROJECT_DIR = process.env.XHS_READER_DIR || "/Users/josh/Documents/Codex/2026-06-26/wo";
 const DEFAULT_XHS_LIKED_URL = "https://www.xiaohongshu.com/user/profile/5909e6ed82ec39715860d419?tab=liked&subTab=note";
 const { readXhsWithPlaywright, PROFILE_DIR, SYSTEM_CHROME_PATH } = require(path.join(XHS_PROJECT_DIR, "xhs-reader"));
+let xhsLikedSession = null;
 
 function getXhsPlaywright() {
   try {
@@ -163,6 +164,7 @@ async function handleXhsLikedRecipes(req, res) {
   }
 
   let context;
+  let keepSessionOpen = false;
   try {
     const options = {
       headless: false,
@@ -174,10 +176,15 @@ async function handleXhsLikedRecipes(req, res) {
       userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
       args: ["--disable-blink-features=AutomationControlled", "--no-first-run", "--disable-dev-shm-usage"]
     };
-    context = await playwright.chromium.launchPersistentContext(PROFILE_DIR, {
-      ...options,
-      executablePath: fs.existsSync(SYSTEM_CHROME_PATH) ? SYSTEM_CHROME_PATH : undefined
-    });
+    if (xhsLikedSession?.context) {
+      context = xhsLikedSession.context;
+    } else {
+      context = await playwright.chromium.launchPersistentContext(PROFILE_DIR, {
+        ...options,
+        executablePath: fs.existsSync(SYSTEM_CHROME_PATH) ? SYSTEM_CHROME_PATH : undefined
+      });
+      xhsLikedSession = { context };
+    }
     const page = context.pages()[0] || (await context.newPage());
     await page.goto(likedUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
     await page.waitForTimeout(3000);
@@ -224,14 +231,20 @@ async function handleXhsLikedRecipes(req, res) {
     }
 
     if (!items.size) {
-      sendJson(res, 200, { ok: false, error: "没有找到点赞列表，请确认浏览器 profile 已登录小红书，并手动打开过点赞页面" });
+      keepSessionOpen = true;
+      sendJson(res, 200, { ok: false, needsLogin: true, error: "没有找到点赞列表。请在弹出的浏览器窗口登录小红书，然后再点击一次抓取点赞。" });
       return;
     }
     sendJson(res, 200, { ok: true, items: [...items.values()].slice(0, limit) });
+    await context.close().catch(() => {});
+    xhsLikedSession = null;
   } catch (error) {
     sendJson(res, 500, { ok: false, error: error.message || "读取点赞列表失败" });
   } finally {
-    if (context) await context.close().catch(() => {});
+    if (context && !keepSessionOpen && xhsLikedSession?.context === context) {
+      await context.close().catch(() => {});
+      xhsLikedSession = null;
+    }
   }
 }
 
