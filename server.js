@@ -182,17 +182,28 @@ async function handleXhsLikedRecipes(req, res) {
     await page.goto(likedUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
     await page.waitForTimeout(3000);
 
-    let likedLink = page.getByText("赞过", { exact: true }).first();
-    if (!(await likedLink.count())) {
+    let clickedLiked = await page.evaluate(() => {
+      const candidates = [...document.querySelectorAll("*")];
+      const element = candidates.find((node) => node.textContent?.trim() === "赞过");
+      if (!element) return false;
+      element.click();
+      return true;
+    });
+    if (!clickedLiked) {
       const mineLink = page.getByText("我", { exact: true }).first();
       if (await mineLink.count()) {
         await mineLink.click().catch(() => {});
         await page.waitForTimeout(2500);
+        clickedLiked = await page.evaluate(() => {
+          const candidates = [...document.querySelectorAll("*")];
+          const element = candidates.find((node) => node.textContent?.trim() === "赞过");
+          if (!element) return false;
+          element.click();
+          return true;
+        });
       }
-      likedLink = page.getByText("赞过", { exact: true }).first();
     }
-    if (await likedLink.count()) {
-      await likedLink.click().catch(() => {});
+    if (clickedLiked) {
       await page.waitForTimeout(2500);
     }
 
