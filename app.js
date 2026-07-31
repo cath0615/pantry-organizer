@@ -793,7 +793,11 @@ function recipeUrlKey(value) {
   try {
     const url = new URL(value);
     const host = url.hostname.replace(/^www\./, "");
-    if (host.includes("xiaohongshu.com")) return `${host}${url.pathname}`;
+    if (host.includes("xiaohongshu.com")) {
+      const noteMatch = url.pathname.match(/^\/(?:discovery\/item|explore)\/([^/]+)/);
+      if (noteMatch) return `${host}/note/${noteMatch[1]}`;
+      return `${host}${url.pathname}`;
+    }
     return `${host}${url.pathname}${url.search}`;
   } catch {
     return String(value || "").trim();

@@ -6,7 +6,7 @@ const path = require("path");
 const PORT = Number(process.env.PORT || 5173);
 const PUBLIC_DIR = __dirname;
 const XHS_PROJECT_DIR = process.env.XHS_READER_DIR || "/Users/josh/Documents/Codex/2026-06-26/wo";
-const DEFAULT_XHS_LIKED_URL = "https://www.xiaohongshu.com/user/profile/5909e6ed82ec39715860d419?tab=liked&subTab=note";
+const DEFAULT_XHS_LIKED_URL = "https://www.xiaohongshu.com/user/profile/5909e6ed82ec39715860d419?tab=liked";
 const { readXhsWithPlaywright, PROFILE_DIR, SYSTEM_CHROME_PATH } = require(path.join(XHS_PROJECT_DIR, "xhs-reader"));
 let xhsLikedSession = null;
 
@@ -153,6 +153,55 @@ async function handleXhsImageData(req, res) {
   sendJson(res, 200, { ok: true, photos });
 }
 
+async function clickVisibleXhsText(page, labels) {
+  return page.evaluate((targetLabels) => {
+    const candidates = [...document.querySelectorAll('a, button, [role="tab"], [role="button"], span, div')];
+    const element = candidates.find((node) => {
+      const rect = node.getBoundingClientRect();
+      const style = window.getComputedStyle(node);
+      return targetLabels.includes(node.textContent?.trim())
+        && rect.width > 0
+        && rect.height > 0
+        && style.visibility !== "hidden"
+        && style.display !== "none";
+    });
+    if (!element) return false;
+    element.click();
+    return true;
+  }, labels);
+}
+
+async function openXhsLikedPage(page, likedUrl) {
+  await page.goto(likedUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.waitForTimeout(3000);
+
+  if (await clickVisibleXhsText(page, ["点赞", "赞过"])) {
+    await page.waitForTimeout(2500);
+    return true;
+  }
+
+  if (await clickVisibleXhsText(page, ["我"])) {
+    await page.waitForTimeout(2500);
+  }
+  if (await clickVisibleXhsText(page, ["点赞", "赞过"])) {
+    await page.waitForTimeout(2500);
+    return true;
+  }
+  return false;
+}
+
+async function waitForXhsLogin(context, page, timeoutMs = 180_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline && !page.isClosed()) {
+    const cookies = await context.cookies("https://www.xiaohongshu.com");
+    if (cookies.some((cookie) => cookie.name === "web_session" && cookie.value)) {
+      return true;
+    }
+    await page.waitForTimeout(1000);
+  }
+  return false;
+}
+
 async function handleXhsLikedRecipes(req, res) {
   const payload = await readBody(req);
   const limit = Math.max(1, Math.min(Number(payload.limit) || 10, 30));
@@ -183,54 +232,40 @@ async function handleXhsLikedRecipes(req, res) {
       xhsLikedSession = { context };
     }
     const page = context.pages()[0] || (await context.newPage());
-    await page.goto(likedUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
-    await page.waitForTimeout(3000);
-
-    let clickedLiked = await page.evaluate(() => {
-      const candidates = [...document.querySelectorAll("*")];
-      const element = candidates.find((node) => ["点赞", "赞过"].includes(node.textContent?.trim()));
-      if (!element) return false;
-      element.click();
-      return true;
-    });
-    if (!clickedLiked) {
-      const mineLink = page.getByText("我", { exact: true }).first();
-      if (await mineLink.count()) {
-        await mineLink.click().catch(() => {});
-        await page.waitForTimeout(2500);
-        clickedLiked = await page.evaluate(() => {
-          const candidates = [...document.querySelectorAll("*")];
-          const element = candidates.find((node) => ["点赞", "赞过"].includes(node.textContent?.trim()));
-          if (!element) return false;
-          element.click();
-          return true;
-        });
-      }
-    }
+    let clickedLiked = await openXhsLikedPage(page, likedUrl);
     if (!clickedLiked) {
       await page.goto("https://www.xiaohongshu.com/explore", {
         waitUntil: "domcontentloaded",
         timeout: 60_000
       });
       await page.waitForTimeout(2000);
-      const loginButton = page.getByText("登录", { exact: true }).first();
-      if (await loginButton.count()) {
-        await loginButton.click().catch(() => {});
+      if (await clickVisibleXhsText(page, ["登录"])) {
         await page.waitForTimeout(1000);
       }
-      keepSessionOpen = true;
-      sendJson(res, 200, {
-        ok: false,
-        needsLogin: true,
-        error: "抓取窗口尚未登录。请在弹出的桌面版小红书完成扫码或手机号登录，然后再点击一次抓取点赞。"
-      });
-      return;
+      const loggedIn = await waitForXhsLogin(context, page);
+      if (!loggedIn) {
+        keepSessionOpen = true;
+        sendJson(res, 200, {
+          ok: false,
+          needsLogin: true,
+          error: "等待登录超时。请在弹出的桌面版小红书完成登录，然后重新点击抓取点赞。"
+        });
+        return;
+      }
+      clickedLiked = await openXhsLikedPage(page, likedUrl);
+      if (!clickedLiked) {
+        keepSessionOpen = true;
+        sendJson(res, 200, {
+          ok: false,
+          error: "已经登录，但没有找到“点赞”标签。请确认弹出的页面是你的个人主页。"
+        });
+        return;
+      }
     }
-    await page.waitForTimeout(2500);
 
     const items = new Map();
     for (let attempt = 0; attempt < 8 && items.size < limit; attempt += 1) {
-      const found = await page.locator('a[href*="/discovery/item/"]').evaluateAll((anchors) => anchors.map((anchor) => ({
+      const found = await page.locator('a[href*="/discovery/item/"], a[href*="/explore/"]').evaluateAll((anchors) => anchors.map((anchor) => ({
         url: anchor.href,
         title: (anchor.innerText || anchor.getAttribute("aria-label") || "").trim()
       })));
