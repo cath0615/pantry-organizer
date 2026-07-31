@@ -24,7 +24,7 @@ function pickPrimaryImages(media, limit = 40) {
     }
     if (item.tag !== "img" || !item.src) continue;
 
-    const src = item.src;
+    const src = String(item.src).replace(/^http:/i, "https:");
     const isAvatar = src.includes("sns-avatar");
     const isComment = src.includes("comment/");
     const isSticker = src.includes("picasso-static");
