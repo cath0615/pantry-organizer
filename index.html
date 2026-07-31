@@ -314,9 +314,19 @@
             <span>无封面</span>
             <img id="recipeCoverPreviewImage" alt="菜谱封面预览" />
           </div>
-          <div class="photo-actions">
-            <button class="ghost-button" id="removeRecipeCoverButton" type="button">移除封面</button>
+        <div class="photo-actions">
+          <button class="ghost-button" id="removeRecipeCoverButton" type="button">移除封面</button>
+        </div>
+        </section>
+        <section class="recipe-extra-photos-section" aria-label="菜谱图片">
+          <div class="section-title-row">
+            <h3>其他图片</h3>
+            <label class="file-button compact">
+              上传图片
+              <input id="recipePhotoInput" type="file" accept="image/*" multiple />
+            </label>
           </div>
+          <div class="recipe-photo-gallery" id="recipePhotoGallery"></div>
         </section>
         <label>
           文案 / 做法

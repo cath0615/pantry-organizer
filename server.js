@@ -112,7 +112,8 @@ async function handleXhsPreview(req, res) {
   }
 
   const result = await readXhsWithPlaywright(url, { sourceType: "article", settleMs: 6000 });
-  const coverUrl = pickPrimaryImages(result.media, 1)[0] || "";
+  const imageOptions = pickPrimaryImages(result.media, 8);
+  const coverUrl = imageOptions[0] || "";
   const coverData = coverUrl ? await imageUrlToDataUrl(coverUrl).catch(() => "") : "";
   const recipeText = extractRecipeText(result.text || "", result.title || "");
   sendJson(res, 200, {
@@ -121,11 +122,25 @@ async function handleXhsPreview(req, res) {
     finalUrl: result.finalUrl || url,
     coverUrl,
     coverData,
+    imageOptions: imageOptions.map((imageUrl, index) => ({ index: index + 1, url: imageUrl })),
     ingredients: recipeText.ingredients,
     steps: recipeText.steps,
     rawText: recipeText.rawText,
     error: result.error || ""
   });
+}
+
+async function handleXhsImageData(req, res) {
+  const payload = await readBody(req);
+  const urls = Array.isArray(payload.urls) ? payload.urls.slice(0, 6) : [];
+  const photos = [];
+  for (const value of urls) {
+    const url = String(value || "").trim();
+    if (!/^https:\/\/[^/]*xhscdn\.com\//i.test(url)) continue;
+    const data = await imageUrlToDataUrl(url).catch(() => "");
+    if (data) photos.push(data);
+  }
+  sendJson(res, 200, { ok: true, photos });
 }
 
 function extractRecipeText(text, title = "") {
@@ -459,6 +474,10 @@ const server = http.createServer(async (req, res) => {
     const parsed = new URL(req.url, `http://${req.headers.host}`);
     if (req.method === "POST" && parsed.pathname === "/api/xhs-preview") {
       await handleXhsPreview(req, res);
+      return;
+    }
+    if (req.method === "POST" && parsed.pathname === "/api/xhs-image-data") {
+      await handleXhsImageData(req, res);
       return;
     }
     serveStatic(req, res);

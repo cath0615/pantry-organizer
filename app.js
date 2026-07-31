@@ -68,6 +68,8 @@ const state = {
   recipeConfirmQueue: [],
   recipeConfirmTotal: 0,
   currentRecipeSourceText: "",
+  currentRecipeImageOptions: [],
+  currentRecipePhotos: [],
   recipeDialogSnapshot: "",
   plannedRecipes: [],
   activeTab: "pantry",
@@ -134,6 +136,8 @@ const els = {
   recipeCoverPreview: $("recipeCoverPreview"),
   recipeCoverPreviewImage: $("recipeCoverPreviewImage"),
   removeRecipeCoverButton: $("removeRecipeCoverButton"),
+  recipePhotoInput: $("recipePhotoInput"),
+  recipePhotoGallery: $("recipePhotoGallery"),
   recipeTitle: $("recipeTitle"),
   recipeUrl: $("recipeUrl"),
   recipeTags: $("recipeTags"),
@@ -278,6 +282,8 @@ function bindEvents() {
   on(els.closeRecipeDialogButton, "click", closeRecipeDialog);
   on(els.recipeCoverInput, "change", handleRecipeCoverInput);
   on(els.removeRecipeCoverButton, "click", removeCurrentRecipeCover);
+  on(els.recipePhotoInput, "change", handleRecipePhotoInput);
+  on(els.recipePhotoGallery, "click", removeRecipePhoto);
   on(els.addRecipeCategoryButton, "click", addRecipeCategoryFromDialog);
   on(els.recipeCategoryInput, "keydown", (event) => {
     if (event.key !== "Enter") return;
@@ -547,6 +553,8 @@ async function saveRecipeFromLinkInput() {
     steps: draftSteps,
     notes: existing?.notes || "",
     coverData: existing?.coverData || preview?.coverData || "",
+    photos: existing?.photos || [],
+    imageOptions: preview?.imageOptions || [],
     sourceText: draftSourceText
   });
   showToast(existing ? "这个链接已经保存过，已打开已有菜谱" : "确认后保存");
@@ -591,6 +599,8 @@ async function saveRecipeLinkBatch(text, urls) {
       steps,
       notes: "",
       coverData: preview.coverData || "",
+      photos: [],
+      imageOptions: preview.imageOptions || [],
       sourceText,
       createdAt: now
     });
@@ -647,7 +657,9 @@ function getRecipeDialogValues() {
     steps: els.recipeSteps?.value || "",
     notes: els.recipeNotes?.value || "",
     coverData: els.recipeCoverData?.value || "",
-    coverFile: els.recipeCoverInput?.files?.[0]?.name || ""
+    coverFile: els.recipeCoverInput?.files?.[0]?.name || "",
+    photos: state.currentRecipePhotos,
+    selectedImageOptions: getSelectedRecipeImageOptions().map((item) => item.index)
   });
 }
 
@@ -1100,6 +1112,8 @@ function openRecipeDialog(recipe = null, options = {}) {
   els.recipeTitle.value = recipe?.title || "";
   els.recipeUrl.value = recipe?.url || "";
   state.currentRecipeSourceText = recipe?.sourceText || "";
+  state.currentRecipeImageOptions = Array.isArray(recipe?.imageOptions) ? recipe.imageOptions : [];
+  state.currentRecipePhotos = Array.isArray(recipe?.photos) ? [...recipe.photos] : [];
   setRecipeDialogTags(recipe?.tags || []);
   if (els.recipeCategoryInput) els.recipeCategoryInput.value = "";
   if (els.recipeIngredients) els.recipeIngredients.value = recipe?.ingredients || "";
@@ -1107,6 +1121,8 @@ function openRecipeDialog(recipe = null, options = {}) {
   els.recipeNotes.value = recipe?.notes || "";
   setRecipeCoverPreview(recipe?.coverData || "");
   if (els.recipeCoverInput) els.recipeCoverInput.value = "";
+  if (els.recipePhotoInput) els.recipePhotoInput.value = "";
+  renderRecipePhotoGallery();
   els.deleteRecipeButton.classList.toggle("is-hidden", !isEditing);
   state.recipeDialogSnapshot = getRecipeDialogValues();
   els.recipeDialog.showModal();
@@ -1116,6 +1132,7 @@ function openRecipeDialog(recipe = null, options = {}) {
 async function handleRecipeSubmit(event) {
   event.preventDefault();
   await waitForPendingPhotos();
+  await loadSelectedRecipeImages();
   const id = els.recipeId.value || createId();
   const existing = state.recipes.find((recipe) => recipe.id === id);
   const recipe = normalizeRecipe({
@@ -1127,6 +1144,7 @@ async function handleRecipeSubmit(event) {
     steps: els.recipeSteps.value,
     notes: els.recipeNotes.value,
     coverData: els.recipeCoverData.value,
+    photos: state.currentRecipePhotos,
     sourceText: existing?.sourceText || state.currentRecipeSourceText || els.recipeLinkInput?.value.trim() || "",
     doneCount: existing?.doneCount || 0,
     lastCookedAt: existing?.lastCookedAt || "",
@@ -1225,6 +1243,78 @@ async function handleRecipeCoverInput(event) {
   }
 }
 
+async function handleRecipePhotoInput(event) {
+  const files = [...(event.target.files || [])].slice(0, 6);
+  if (!files.length) return;
+  try {
+    const photos = await Promise.all(files.map((file) => trackPhotoTask(compressImageFile(file))));
+    state.currentRecipePhotos.push(...photos.filter(Boolean));
+    renderRecipePhotoGallery();
+    showToast(`${photos.length} 张图片已添加`);
+  } catch {
+    showToast("图片读取失败");
+  } finally {
+    if (els.recipePhotoInput) els.recipePhotoInput.value = "";
+  }
+}
+
+function removeRecipePhoto(event) {
+  const button = event.target.closest("button[data-recipe-photo-index]");
+  if (!button) return;
+  state.currentRecipePhotos.splice(Number(button.dataset.recipePhotoIndex), 1);
+  renderRecipePhotoGallery();
+}
+
+function getSelectedRecipeImageOptions() {
+  if (!els.recipePhotoGallery) return [];
+  const selected = new Set(
+    [...els.recipePhotoGallery.querySelectorAll("input[data-recipe-image-option]:checked")]
+      .map((input) => Number(input.dataset.recipeImageOption))
+  );
+  return state.currentRecipeImageOptions.filter((item) => selected.has(Number(item.index)));
+}
+
+async function loadSelectedRecipeImages() {
+  const selected = getSelectedRecipeImageOptions();
+  if (!selected.length) return;
+  try {
+    const response = await fetch(getRecipeImageDataEndpoint(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ urls: selected.map((item) => item.url) })
+    });
+    if (!response.ok) return;
+    const data = await response.json();
+    state.currentRecipePhotos.push(...(Array.isArray(data.photos) ? data.photos : []));
+  } catch {
+    showToast("附加图片保存失败，其他内容仍可保存");
+  }
+}
+
+function renderRecipePhotoGallery() {
+  if (!els.recipePhotoGallery) return;
+  els.recipePhotoGallery.replaceChildren();
+  state.currentRecipePhotos.forEach((photoData, index) => {
+    const item = document.createElement("div");
+    item.className = "recipe-extra-photo";
+    item.innerHTML = `<img alt="已保存的菜谱图片"><button type="button" class="icon-button small" data-recipe-photo-index="${index}" aria-label="移除图片">×</button>`;
+    item.querySelector("img").src = photoData;
+    els.recipePhotoGallery.append(item);
+  });
+  for (const option of state.currentRecipeImageOptions) {
+    const label = document.createElement("label");
+    label.className = "recipe-image-option";
+    label.innerHTML = `<img alt="帖子第 ${option.index} 张图片"><span><input type="checkbox" data-recipe-image-option="${option.index}" ${option.index === 1 ? "disabled" : ""}> ${option.index === 1 ? "封面" : `保存第 ${option.index} 张`}</span>`;
+    label.querySelector("img").src = option.url;
+    els.recipePhotoGallery.append(label);
+  }
+}
+
+function getRecipeImageDataEndpoint() {
+  if (["localhost", "127.0.0.1"].includes(window.location.hostname)) return `${window.location.origin}/api/xhs-image-data`;
+  return "http://127.0.0.1:5173/api/xhs-image-data";
+}
+
 function removeCurrentRecipeCover() {
   setRecipeCoverPreview("");
   if (els.recipeCoverInput) els.recipeCoverInput.value = "";
@@ -1307,6 +1397,7 @@ function normalizeRecipe(recipe) {
     steps: String(recipe.steps || "").trim(),
     notes: String(recipe.notes || "").trim(),
     coverData: recipe.coverData || "",
+    photos: Array.isArray(recipe.photos) ? recipe.photos.filter(Boolean) : [],
     sourceText: String(recipe.sourceText || "").trim(),
     doneCount: Number(recipe.doneCount || 0),
     lastCookedAt: String(recipe.lastCookedAt || "").trim(),

@@ -691,6 +691,43 @@ select:focus {
   font-size: 0.92rem;
 }
 
+.recipe-photo-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 10px;
+}
+
+.recipe-extra-photo,
+.recipe-image-option {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.recipe-extra-photo img,
+.recipe-image-option img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.recipe-extra-photo .icon-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 26px;
+  min-height: 26px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.recipe-image-option span {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 .recipe-link {
   justify-self: start;
   color: var(--accent-dark);
