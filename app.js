@@ -535,29 +535,36 @@ async function saveRecipeFromLinkInput() {
   }
   const existing = findRecipeByUrl(url);
   let preview = null;
-  if (!existing) {
+  if (existing) {
+    const refresh = window.confirm(`这个链接已经保存过：\n${existing.title}\n\n是否重新抓取并更新这条菜谱？`);
+    if (refresh) {
+      showToast("正在重新抓取并更新");
+      preview = await fetchRecipePreview(url);
+      if (!preview) return;
+    }
+  } else {
     showToast("正在抓取封面和步骤");
     preview = await fetchRecipePreview(url);
   }
-  const draftTitle = existing?.title || extractRecipeTitle(text) || preview?.title || "未命名菜谱";
-  const draftIngredients = existing?.ingredients || preview?.ingredients || "";
-  const draftSteps = existing?.steps || preview?.steps || "";
-  const draftSourceText = existing?.sourceText || preview?.rawText || text;
+  const draftTitle = preview?.title || existing?.title || extractRecipeTitle(text) || "未命名菜谱";
+  const draftIngredients = preview ? preview.ingredients || "" : existing?.ingredients || "";
+  const draftSteps = preview?.steps || existing?.steps || "";
+  const draftSourceText = preview?.rawText || existing?.sourceText || text;
   openRecipeDialog({
     ...(existing || {}),
     id: existing?.id || "",
     title: draftTitle,
-    url: preview?.finalUrl || url,
+    url: preview?.finalUrl || existing?.url || url,
     tags: existing?.tags?.length ? existing.tags : inferRecipeTags({ title: draftTitle, ingredients: draftIngredients, steps: draftSteps, sourceText: draftSourceText }),
     ingredients: draftIngredients,
     steps: draftSteps,
     notes: existing?.notes || "",
-    coverData: existing?.coverData || preview?.coverData || "",
+    coverData: preview?.coverData || existing?.coverData || "",
     photos: existing?.photos || [],
     imageOptions: preview?.imageOptions || [],
     sourceText: draftSourceText
   });
-  showToast(existing ? "这个链接已经保存过，已打开已有菜谱" : "确认后保存");
+  showToast(existing && preview ? "重新抓取完成，保存后会更新原菜谱" : existing ? "已打开已有菜谱" : "确认后保存");
 }
 
 async function saveRecipeLinkBatch(text, urls) {
@@ -568,12 +575,15 @@ async function saveRecipeLinkBatch(text, urls) {
 
   for (let index = 0; index < urls.length; index += 1) {
     const url = urls[index];
-    const existing = findRecipeByUrl(url);
+    let existing = findRecipeByUrl(url);
     if (existing) {
-      skipped += 1;
-      continue;
+      const refresh = window.confirm(`第 ${index + 1}/${urls.length} 个链接已经保存过：\n${existing.title}\n\n是否重新抓取并更新？`);
+      if (!refresh) {
+        skipped += 1;
+        continue;
+      }
     }
-    showToast(`正在抓第 ${index + 1}/${urls.length} 个`);
+    showToast(`${existing ? "正在重新抓取" : "正在抓"} 第 ${index + 1}/${urls.length} 个`);
     const preview = await fetchRecipePreview(url, { quiet: true });
     if (!preview) {
       failed += 1;
@@ -581,28 +591,33 @@ async function saveRecipeLinkBatch(text, urls) {
     }
     const finalUrl = preview.finalUrl || url;
     const duplicate = findRecipeByUrl(finalUrl);
-    if (duplicate) {
-      skipped += 1;
-      continue;
+    if (duplicate && (!existing || duplicate.id !== existing.id)) {
+      const refresh = window.confirm(`这个链接也匹配到已保存菜谱：\n${duplicate.title}\n\n是否更新它？`);
+      if (!refresh) {
+        skipped += 1;
+        continue;
+      }
+      existing = duplicate;
     }
     const now = new Date().toISOString();
-    const title = preview.title || extractRecipeTitle(text) || "未命名菜谱";
+    const title = preview.title || existing?.title || extractRecipeTitle(text) || "未命名菜谱";
     const ingredients = preview.ingredients || "";
     const steps = preview.steps || "";
     const sourceText = preview.rawText || text;
     drafts.push({
-      id: "",
+      ...(existing || {}),
+      id: existing?.id || "",
       title,
       url: finalUrl,
-      tags: inferRecipeTags({ title, ingredients, steps, sourceText }),
+      tags: existing?.tags?.length ? existing.tags : inferRecipeTags({ title, ingredients, steps, sourceText }),
       ingredients,
       steps,
-      notes: "",
-      coverData: preview.coverData || "",
-      photos: [],
+      notes: existing?.notes || "",
+      coverData: preview.coverData || existing?.coverData || "",
+      photos: existing?.photos || [],
       imageOptions: preview.imageOptions || [],
       sourceText,
-      createdAt: now
+      createdAt: existing?.createdAt || now
     });
   }
 
