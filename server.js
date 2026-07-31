@@ -171,11 +171,37 @@ async function clickVisibleXhsText(page, labels) {
   }, labels);
 }
 
+async function clickXhsProfileLikedTab(page) {
+  return page.evaluate(() => {
+    const isVisible = (node) => {
+      const rect = node.getBoundingClientRect();
+      const style = window.getComputedStyle(node);
+      return rect.width > 0
+        && rect.height > 0
+        && style.visibility !== "hidden"
+        && style.display !== "none";
+    };
+    const candidates = [...document.querySelectorAll('a, button, [role="tab"], [role="button"], span, div')]
+      .filter((node) => ["点赞", "赞过"].includes(node.textContent?.trim()) && isVisible(node));
+    const tab = candidates.find((node) => {
+      let parent = node.parentElement;
+      for (let depth = 0; parent && depth < 4; depth += 1, parent = parent.parentElement) {
+        const text = parent.textContent || "";
+        if (text.includes("笔记") && text.includes("收藏")) return true;
+      }
+      return false;
+    });
+    if (!tab) return false;
+    tab.click();
+    return true;
+  });
+}
+
 async function openXhsLikedPage(page, likedUrl) {
   await page.goto(likedUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.waitForTimeout(3000);
 
-  if (await clickVisibleXhsText(page, ["点赞", "赞过"])) {
+  if (await clickXhsProfileLikedTab(page)) {
     await page.waitForTimeout(2500);
     return true;
   }
@@ -183,18 +209,33 @@ async function openXhsLikedPage(page, likedUrl) {
   if (await clickVisibleXhsText(page, ["我"])) {
     await page.waitForTimeout(2500);
   }
-  if (await clickVisibleXhsText(page, ["点赞", "赞过"])) {
+  if (await clickXhsProfileLikedTab(page)) {
     await page.waitForTimeout(2500);
     return true;
   }
   return false;
 }
 
-async function waitForXhsLogin(context, page, timeoutMs = 180_000) {
+async function waitForXhsLogin(page, timeoutMs = 180_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline && !page.isClosed()) {
-    const cookies = await context.cookies("https://www.xiaohongshu.com");
-    if (cookies.some((cookie) => cookie.name === "web_session" && cookie.value)) {
+    const loggedIn = await page.evaluate(() => {
+      const isVisible = (node) => {
+        const rect = node.getBoundingClientRect();
+        const style = window.getComputedStyle(node);
+        return rect.width > 0
+          && rect.height > 0
+          && style.visibility !== "hidden"
+          && style.display !== "none";
+      };
+      const loginPanelVisible = [...document.querySelectorAll("body *")].some((node) => {
+        const text = node.textContent?.trim();
+        return ["手机号登录", "登录后推荐更懂你的笔记"].includes(text) && isVisible(node);
+      });
+      const profileLinkVisible = [...document.querySelectorAll('a[href*="/user/profile/"]')].some(isVisible);
+      return profileLinkVisible && !loginPanelVisible;
+    }).catch(() => false);
+    if (loggedIn) {
       return true;
     }
     await page.waitForTimeout(1000);
@@ -242,7 +283,7 @@ async function handleXhsLikedRecipes(req, res) {
       if (await clickVisibleXhsText(page, ["登录"])) {
         await page.waitForTimeout(1000);
       }
-      const loggedIn = await waitForXhsLogin(context, page);
+      const loggedIn = await waitForXhsLogin(page);
       if (!loggedIn) {
         keepSessionOpen = true;
         sendJson(res, 200, {
@@ -265,10 +306,14 @@ async function handleXhsLikedRecipes(req, res) {
 
     const items = new Map();
     for (let attempt = 0; attempt < 8 && items.size < limit; attempt += 1) {
-      const found = await page.locator('a[href*="/discovery/item/"], a[href*="/explore/"]').evaluateAll((anchors) => anchors.map((anchor) => ({
-        url: anchor.href,
-        title: (anchor.innerText || anchor.getAttribute("aria-label") || "").trim()
-      })));
+      const found = await page.locator("section.note-item[data-note-id]").evaluateAll((cards) => cards.map((card) => {
+        const link = card.querySelector('a.cover[href*="xsec_token="], a.title[href*="xsec_token="]');
+        if (!link) return null;
+        return {
+          url: new URL(link.getAttribute("href"), location.origin).href,
+          title: card.querySelector("a.title")?.textContent?.trim() || ""
+        };
+      }).filter(Boolean));
       for (const item of found) {
         if (!item.url || items.has(item.url)) continue;
         items.set(item.url, item);
