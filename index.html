@@ -343,6 +343,13 @@
       </form>
     </dialog>
 
+    <dialog id="recipeImageViewer" class="recipe-image-viewer">
+      <form method="dialog" class="recipe-image-viewer-card">
+        <button class="icon-button small recipe-image-viewer-close" value="cancel" type="submit" aria-label="关闭">×</button>
+        <img id="recipeImageViewerImage" alt="菜谱图片" />
+      </form>
+    </dialog>
+
     <dialog id="backupDialog">
       <form method="dialog" class="dialog-card">
         <div class="section-title-row">
@@ -392,6 +399,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=55" type="module"></script>
+    <script src="./app.js?v=56" type="module"></script>
   </body>
 </html>

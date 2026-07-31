@@ -138,6 +138,8 @@ const els = {
   removeRecipeCoverButton: $("removeRecipeCoverButton"),
   recipePhotoInput: $("recipePhotoInput"),
   recipePhotoGallery: $("recipePhotoGallery"),
+  recipeImageViewer: $("recipeImageViewer"),
+  recipeImageViewerImage: $("recipeImageViewerImage"),
   recipeTitle: $("recipeTitle"),
   recipeUrl: $("recipeUrl"),
   recipeTags: $("recipeTags"),
@@ -284,6 +286,8 @@ function bindEvents() {
   on(els.removeRecipeCoverButton, "click", removeCurrentRecipeCover);
   on(els.recipePhotoInput, "change", handleRecipePhotoInput);
   on(els.recipePhotoGallery, "click", removeRecipePhoto);
+  on(els.recipePhotoGallery, "click", openRecipeImageFromGallery);
+  on(els.recipeCoverPreviewImage, "click", () => openRecipeImageViewer(els.recipeCoverPreviewImage?.src));
   on(els.addRecipeCategoryButton, "click", addRecipeCategoryFromDialog);
   on(els.recipeCategoryInput, "keydown", (event) => {
     if (event.key !== "Enter") return;
@@ -1278,6 +1282,18 @@ function removeRecipePhoto(event) {
   if (!button) return;
   state.currentRecipePhotos.splice(Number(button.dataset.recipePhotoIndex), 1);
   renderRecipePhotoGallery();
+}
+
+function openRecipeImageFromGallery(event) {
+  const image = event.target.closest("img");
+  if (image) openRecipeImageViewer(image.src, image.alt);
+}
+
+function openRecipeImageViewer(src, alt = "菜谱图片") {
+  if (!src || !els.recipeImageViewer || !els.recipeImageViewerImage) return;
+  els.recipeImageViewerImage.src = src;
+  els.recipeImageViewerImage.alt = alt;
+  els.recipeImageViewer.showModal();
 }
 
 function getSelectedRecipeImageOptions() {
