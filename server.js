@@ -180,7 +180,7 @@ function collapseDuplicatePostText(text, title = "") {
 function removeTrailingPostMetadata(text) {
   let cleaned = String(text || "").trim();
   cleaned = cleaned.replace(/\s+\d{4}[-/.]\d{1,2}[-/.]\d{1,2}\s*$/, "").trim();
-  cleaned = cleaned.replace(/(?:\s+#[^\s#]+)+\s*$/, "").trim();
+  cleaned = cleaned.replace(/\s*#[^\s#]+(?:\s*#[^\s#]+)*\s*$/, "").trim();
   return cleaned;
 }
 
