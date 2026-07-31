@@ -8,7 +8,7 @@ const PUBLIC_DIR = __dirname;
 const XHS_PROJECT_DIR = process.env.XHS_READER_DIR || "/Users/josh/Documents/Codex/2026-06-26/wo";
 const { readXhsWithPlaywright } = require(path.join(XHS_PROJECT_DIR, "xhs-reader"));
 
-function pickPrimaryImages(media, limit = 4) {
+function pickPrimaryImages(media, limit = 40) {
   const seen = new Set();
   const candidates = [];
   const items = media || [];
@@ -38,7 +38,7 @@ function pickPrimaryImages(media, limit = 4) {
     seen.add(src);
     candidates.push(src);
     sawPrimaryImage = true;
-    if (candidates.length >= limit || hasVideo) break;
+    if (candidates.length >= limit) break;
   }
 
   return candidates;
@@ -112,7 +112,7 @@ async function handleXhsPreview(req, res) {
   }
 
   const result = await readXhsWithPlaywright(url, { sourceType: "article", settleMs: 6000 });
-  const imageOptions = pickPrimaryImages(result.media, 8);
+  const imageOptions = pickPrimaryImages(result.media, 40);
   const coverUrl = imageOptions[0] || "";
   const coverData = coverUrl ? await imageUrlToDataUrl(coverUrl).catch(() => "") : "";
   const recipeText = extractRecipeText(result.text || "", result.title || "");
