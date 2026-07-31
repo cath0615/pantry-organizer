@@ -6,6 +6,7 @@ const path = require("path");
 const PORT = Number(process.env.PORT || 5173);
 const PUBLIC_DIR = __dirname;
 const XHS_PROJECT_DIR = process.env.XHS_READER_DIR || "/Users/josh/Documents/Codex/2026-06-26/wo";
+const DEFAULT_XHS_LIKED_URL = "https://www.xiaohongshu.com/user/profile/5909e6ed82ec39715860d419?tab=liked&subTab=note";
 const { readXhsWithPlaywright, PROFILE_DIR, SYSTEM_CHROME_PATH } = require(path.join(XHS_PROJECT_DIR, "xhs-reader"));
 
 function getXhsPlaywright() {
@@ -154,6 +155,7 @@ async function handleXhsImageData(req, res) {
 async function handleXhsLikedRecipes(req, res) {
   const payload = await readBody(req);
   const limit = Math.max(1, Math.min(Number(payload.limit) || 10, 30));
+  const likedUrl = String(payload.url || DEFAULT_XHS_LIKED_URL).trim();
   const playwright = getXhsPlaywright();
   if (!playwright) {
     sendJson(res, 500, { ok: false, error: "Playwright is not installed" });
@@ -177,14 +179,8 @@ async function handleXhsLikedRecipes(req, res) {
       executablePath: fs.existsSync(SYSTEM_CHROME_PATH) ? SYSTEM_CHROME_PATH : undefined
     });
     const page = context.pages()[0] || (await context.newPage());
-    await page.goto("https://www.xiaohongshu.com/", { waitUntil: "domcontentloaded", timeout: 60_000 });
+    await page.goto(likedUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
     await page.waitForTimeout(3000);
-
-    const profileLink = page.locator('a[href*="/user/profile/"], a[href*="/user/"]').first();
-    if (await profileLink.count()) {
-      await profileLink.click().catch(() => {});
-      await page.waitForTimeout(2500);
-    }
 
     let likedLink = page.getByText("赞过", { exact: true }).first();
     if (!(await likedLink.count())) {
