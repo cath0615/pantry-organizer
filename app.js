@@ -277,6 +277,7 @@ function bindEvents() {
   on(els.importRecipesInput, "change", importRecipes);
   on(els.recipeForm, "submit", handleRecipeSubmit);
   on(els.recipeDialog, "cancel", handleRecipeDialogCancel);
+  on(els.recipeDialog, "click", handleRecipeDialogBackdropClick);
   on(els.recipeList, "click", handleRecipeListAction);
   on(els.plannedRecipeList, "click", handlePlannedRecipeAction);
   on(els.plannedRecipeList, "input", updatePlannedRecipeDetails);
@@ -297,6 +298,7 @@ function bindEvents() {
   on(els.recipeSelectedTags, "click", removeRecipeCategoryFromDialog);
   on(els.addBlankButton, "click", () => openItemDialog());
   on(els.itemForm, "submit", handleItemSubmit);
+  on(els.itemDialog, "click", handleItemDialogBackdropClick);
   on(els.itemCategory, "change", () => updateCustomCategoryVisibility());
   on(els.deleteItemButton, "click", deleteCurrentItem);
   on(els.closeItemDialogButton, "click", () => els.itemDialog.close());
@@ -658,6 +660,10 @@ function closeRecipeDialog() {
   els.recipeDialog.close();
 }
 
+function handleRecipeDialogBackdropClick(event) {
+  if (event.target === els.recipeDialog) closeRecipeDialog();
+}
+
 function handleRecipeDialogCancel(event) {
   if (!confirmRecipeDialogClose()) {
     event.preventDefault();
@@ -665,6 +671,10 @@ function handleRecipeDialogCancel(event) {
   }
   cancelRecipeConfirmQueue();
   state.recipeDialogSnapshot = "";
+}
+
+function handleItemDialogBackdropClick(event) {
+  if (event.target === els.itemDialog) els.itemDialog.close();
 }
 
 function getRecipeDialogValues() {
