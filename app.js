@@ -78,6 +78,7 @@ const state = {
   activeTab: "pantry",
   mealPlanner: {
     meals: {},
+    fridge: "",
     ideas: "",
     shopping: "",
     shoppingItems: []
@@ -109,6 +110,7 @@ const els = {
   sortSelect: $("sortSelect"),
   mealDayTabs: $("mealDayTabs"),
   mealGrid: $("mealGrid"),
+  fridgeNote: $("fridgeNote"),
   mealIdeasNote: $("mealIdeasNote"),
   shoppingItemInput: $("shoppingItemInput"),
   addShoppingItemButton: $("addShoppingItemButton"),
@@ -263,6 +265,7 @@ function bindEvents() {
   });
   on(els.mealDayTabs, "click", switchMealDay);
   on(els.mealGrid, "input", saveMealPlanner);
+  on(els.fridgeNote, "input", saveMealPlanner);
   on(els.mealIdeasNote, "input", saveMealPlanner);
   on(els.addShoppingItemButton, "click", addShoppingReminder);
   on(els.shoppingItemInput, "keydown", handleShoppingReminderInput);
@@ -419,18 +422,20 @@ function loadMealPlanner() {
     const shoppingItems = normalizeShoppingReminders(saved.shoppingItems, saved.shopping);
     state.mealPlanner = {
       meals: saved.meals || {},
+      fridge: saved.fridge || "",
       ideas: saved.ideas || "",
       shopping: shoppingReminderText(shoppingItems),
       shoppingItems
     };
   } catch {
-    state.mealPlanner = { meals: {}, ideas: "", shopping: "", shoppingItems: [] };
+    state.mealPlanner = { meals: {}, fridge: "", ideas: "", shopping: "", shoppingItems: [] };
   }
 
   for (const input of els.mealGrid.querySelectorAll(".meal-input")) {
     const key = mealKey(input.dataset.day, input.dataset.meal);
     input.value = state.mealPlanner.meals[key] || "";
   }
+  if (els.fridgeNote) els.fridgeNote.value = state.mealPlanner.fridge;
   if (els.mealIdeasNote) els.mealIdeasNote.value = state.mealPlanner.ideas;
   renderShoppingReminders();
 }
@@ -445,6 +450,7 @@ function saveMealPlanner() {
   }
   state.mealPlanner = {
     meals,
+    fridge: els.fridgeNote?.value || "",
     ideas: els.mealIdeasNote?.value || "",
     shopping: shoppingReminderText(state.mealPlanner.shoppingItems),
     shoppingItems: state.mealPlanner.shoppingItems
@@ -2705,6 +2711,7 @@ async function applyBackupPayload(payload, options = {}) {
     );
     state.mealPlanner = {
       meals: payload.mealPlanner.meals || {},
+      fridge: payload.mealPlanner.fridge || "",
       ideas: payload.mealPlanner.ideas || "",
       shopping: shoppingReminderText(shoppingItems),
       shoppingItems

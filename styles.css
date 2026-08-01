@@ -432,6 +432,7 @@ select:focus {
 
 .shopping-reminders {
   align-content: start;
+  grid-column: 1 / -1;
   min-width: 0;
 }
 
@@ -1083,6 +1084,10 @@ dialog::backdrop {
   .planner-notes-grid,
   .sync-grid {
     grid-template-columns: 1fr;
+  }
+
+  .shopping-reminders {
+    grid-column: auto;
   }
 
   .draft-photo-field {
