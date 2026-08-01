@@ -430,6 +430,41 @@ select:focus {
   min-height: 180px;
 }
 
+.fridge-reminders {
+  align-content: start;
+  min-width: 0;
+}
+
+.fridge-category-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #eee2d1;
+}
+
+.fridge-category-tabs button {
+  min-height: 30px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 2px 4px;
+}
+
+.fridge-category-tabs button.is-active {
+  background: var(--surface-strong);
+  color: var(--ink);
+  box-shadow: 0 1px 7px rgba(67, 48, 28, 0.1);
+}
+
+.fridge-reminders textarea {
+  min-height: 138px;
+}
+
 .shopping-reminders {
   align-content: start;
   grid-column: 1 / -1;
@@ -438,7 +473,7 @@ select:focus {
 
 .shopping-add-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 42px;
+  grid-template-columns: minmax(96px, 0.45fr) minmax(0, 1fr) 42px;
   gap: 8px;
 }
 
@@ -467,6 +502,23 @@ select:focus {
 
 .shopping-reminder-list:empty {
   display: none;
+}
+
+.shopping-reminder-group {
+  display: grid;
+}
+
+.shopping-reminder-group + .shopping-reminder-group {
+  border-top: 1px solid var(--line);
+  padding-top: 4px;
+}
+
+.shopping-reminder-group h3 {
+  margin: 0;
+  padding: 5px 8px 3px;
+  color: var(--accent-dark);
+  font-size: 0.78rem;
+  font-weight: 850;
 }
 
 .shopping-reminder-empty {

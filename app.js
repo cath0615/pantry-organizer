@@ -29,6 +29,8 @@ const BACKUP_CHUNK_SIZE = 180000;
 const CHUNK_PREFIX = "PANTRY_BACKUP_PART";
 const QUANTITY_PHRASE = `(?:数量|数目|有)?\\s*[一二两三四五六七八九十百\\d]+(?:\\.\\d+)?\\s*(?:${QUANTITY_UNITS})`;
 const WEEK_DAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+const FRIDGE_CATEGORIES = ["蔬菜", "水果", "奶制品", "蛋/豆制品", "肉/海鲜", "其他"];
+const DEFAULT_SHOPPING_CATEGORY = "未分类";
 const MEAL_SLOTS = [
   { id: "breakfast", label: "早饭" },
   { id: "lunch", label: "中饭" },
@@ -62,6 +64,7 @@ const state = {
   activeChunkIndex: 0,
   fullBackupText: "",
   activeMealDay: WEEK_DAYS[0],
+  activeFridgeCategory: FRIDGE_CATEGORIES[0],
   recipes: [],
   recipeQuery: "",
   recipeTag: "all",
@@ -79,9 +82,11 @@ const state = {
   mealPlanner: {
     meals: {},
     fridge: "",
+    fridgeSections: {},
     ideas: "",
     shopping: "",
-    shoppingItems: []
+    shoppingItems: [],
+    shoppingCategories: [DEFAULT_SHOPPING_CATEGORY]
   }
 };
 
@@ -110,8 +115,11 @@ const els = {
   sortSelect: $("sortSelect"),
   mealDayTabs: $("mealDayTabs"),
   mealGrid: $("mealGrid"),
+  fridgeCategoryTabs: $("fridgeCategoryTabs"),
   fridgeNote: $("fridgeNote"),
   mealIdeasNote: $("mealIdeasNote"),
+  shoppingCategoryInput: $("shoppingCategoryInput"),
+  shoppingCategoryOptions: $("shoppingCategoryOptions"),
   shoppingItemInput: $("shoppingItemInput"),
   addShoppingItemButton: $("addShoppingItemButton"),
   shoppingReminderList: $("shoppingReminderList"),
@@ -265,7 +273,8 @@ function bindEvents() {
   });
   on(els.mealDayTabs, "click", switchMealDay);
   on(els.mealGrid, "input", saveMealPlanner);
-  on(els.fridgeNote, "input", saveMealPlanner);
+  on(els.fridgeCategoryTabs, "click", switchFridgeCategory);
+  on(els.fridgeNote, "input", saveFridgeNote);
   on(els.mealIdeasNote, "input", saveMealPlanner);
   on(els.addShoppingItemButton, "click", addShoppingReminder);
   on(els.shoppingItemInput, "keydown", handleShoppingReminderInput);
@@ -420,23 +429,35 @@ function loadMealPlanner() {
   try {
     const saved = JSON.parse(localStorage.getItem(MEAL_PLANNER_KEY) || "{}");
     const shoppingItems = normalizeShoppingReminders(saved.shoppingItems, saved.shopping);
+    const fridgeSections = normalizeFridgeSections(saved.fridgeSections, saved.fridge);
     state.mealPlanner = {
       meals: saved.meals || {},
-      fridge: saved.fridge || "",
+      fridge: fridgeSectionText(fridgeSections),
+      fridgeSections,
       ideas: saved.ideas || "",
       shopping: shoppingReminderText(shoppingItems),
-      shoppingItems
+      shoppingItems,
+      shoppingCategories: normalizeShoppingCategories(saved.shoppingCategories, shoppingItems)
     };
   } catch {
-    state.mealPlanner = { meals: {}, fridge: "", ideas: "", shopping: "", shoppingItems: [] };
+    state.mealPlanner = {
+      meals: {},
+      fridge: "",
+      fridgeSections: normalizeFridgeSections(),
+      ideas: "",
+      shopping: "",
+      shoppingItems: [],
+      shoppingCategories: [DEFAULT_SHOPPING_CATEGORY]
+    };
   }
 
   for (const input of els.mealGrid.querySelectorAll(".meal-input")) {
     const key = mealKey(input.dataset.day, input.dataset.meal);
     input.value = state.mealPlanner.meals[key] || "";
   }
-  if (els.fridgeNote) els.fridgeNote.value = state.mealPlanner.fridge;
+  renderFridgeCategories();
   if (els.mealIdeasNote) els.mealIdeasNote.value = state.mealPlanner.ideas;
+  renderShoppingCategories();
   renderShoppingReminders();
 }
 
@@ -450,10 +471,12 @@ function saveMealPlanner() {
   }
   state.mealPlanner = {
     meals,
-    fridge: els.fridgeNote?.value || "",
+    fridge: fridgeSectionText(state.mealPlanner.fridgeSections),
+    fridgeSections: state.mealPlanner.fridgeSections,
     ideas: els.mealIdeasNote?.value || "",
     shopping: shoppingReminderText(state.mealPlanner.shoppingItems),
-    shoppingItems: state.mealPlanner.shoppingItems
+    shoppingItems: state.mealPlanner.shoppingItems,
+    shoppingCategories: state.mealPlanner.shoppingCategories
   };
   localStorage.setItem(MEAL_PLANNER_KEY, JSON.stringify(state.mealPlanner));
 }
@@ -479,6 +502,54 @@ function clearShoppingNote() {
   showToast("已清空要买");
 }
 
+function normalizeFridgeSections(sections, legacyText = "") {
+  const normalized = Object.fromEntries(FRIDGE_CATEGORIES.map((category) => [category, ""]));
+  if (sections && typeof sections === "object" && !Array.isArray(sections)) {
+    for (const category of FRIDGE_CATEGORIES) normalized[category] = String(sections[category] || "");
+  } else if (legacyText) {
+    normalized["其他"] = String(legacyText);
+  }
+  return normalized;
+}
+
+function fridgeSectionText(sections = {}) {
+  return FRIDGE_CATEGORIES
+    .filter((category) => String(sections[category] || "").trim())
+    .map((category) => `${category}：\n${String(sections[category]).trim()}`)
+    .join("\n\n");
+}
+
+function saveFridgeNote() {
+  state.mealPlanner.fridgeSections[state.activeFridgeCategory] = els.fridgeNote?.value || "";
+  saveMealPlanner();
+}
+
+function switchFridgeCategory(event) {
+  const button = event.target.closest("button[data-fridge-category]");
+  if (!button) return;
+  state.activeFridgeCategory = button.dataset.fridgeCategory;
+  renderFridgeCategories();
+}
+
+function renderFridgeCategories() {
+  if (!els.fridgeCategoryTabs || !els.fridgeNote) return;
+  if (!FRIDGE_CATEGORIES.includes(state.activeFridgeCategory)) state.activeFridgeCategory = FRIDGE_CATEGORIES[0];
+  els.fridgeCategoryTabs.replaceChildren();
+  for (const category of FRIDGE_CATEGORIES) {
+    const button = document.createElement("button");
+    const isActive = category === state.activeFridgeCategory;
+    button.type = "button";
+    button.dataset.fridgeCategory = category;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-selected", String(isActive));
+    button.textContent = category;
+    els.fridgeCategoryTabs.append(button);
+  }
+  els.fridgeNote.value = state.mealPlanner.fridgeSections[state.activeFridgeCategory] || "";
+  els.fridgeNote.setAttribute("aria-label", `冰箱快用：${state.activeFridgeCategory}`);
+}
+
 function normalizeShoppingReminders(items, legacyText = "") {
   const source = Array.isArray(items)
     ? items
@@ -488,9 +559,18 @@ function normalizeShoppingReminders(items, legacyText = "") {
     .map((item) => ({
       id: item.id || createId(),
       text: String(item.text || "").trim(),
-      done: Boolean(item.done)
+      done: Boolean(item.done),
+      category: String(item.category || DEFAULT_SHOPPING_CATEGORY).trim() || DEFAULT_SHOPPING_CATEGORY
     }))
     .filter((item) => item.text);
+}
+
+function normalizeShoppingCategories(categories, items = []) {
+  return [...new Set([
+    DEFAULT_SHOPPING_CATEGORY,
+    ...(Array.isArray(categories) ? categories : []),
+    ...items.map((item) => item.category)
+  ].map((category) => String(category || "").trim()).filter(Boolean))];
 }
 
 function shoppingReminderText(items = []) {
@@ -500,9 +580,15 @@ function shoppingReminderText(items = []) {
 function addShoppingReminder() {
   const text = els.shoppingItemInput?.value.trim() || "";
   if (!text) return;
-  state.mealPlanner.shoppingItems.push({ id: createId(), text, done: false });
+  const category = els.shoppingCategoryInput?.value.trim() || DEFAULT_SHOPPING_CATEGORY;
+  state.mealPlanner.shoppingCategories = normalizeShoppingCategories(
+    [...state.mealPlanner.shoppingCategories, category],
+    state.mealPlanner.shoppingItems
+  );
+  state.mealPlanner.shoppingItems.push({ id: createId(), text, done: false, category });
   els.shoppingItemInput.value = "";
   saveMealPlanner();
+  renderShoppingCategories();
   renderShoppingReminders();
   els.shoppingItemInput.focus();
 }
@@ -535,31 +621,52 @@ function removeShoppingReminder(event) {
 function renderShoppingReminders() {
   if (!els.shoppingReminderList) return;
   els.shoppingReminderList.replaceChildren();
-  for (const item of state.mealPlanner.shoppingItems) {
-    const row = document.createElement("div");
-    row.className = "shopping-reminder-item";
-    row.classList.toggle("is-done", item.done);
+  const categories = normalizeShoppingCategories(state.mealPlanner.shoppingCategories, state.mealPlanner.shoppingItems);
+  for (const category of categories) {
+    const items = state.mealPlanner.shoppingItems.filter((item) => item.category === category);
+    if (!items.length) continue;
+    const group = document.createElement("section");
+    group.className = "shopping-reminder-group";
+    const heading = document.createElement("h3");
+    heading.textContent = category;
+    group.append(heading);
+    for (const item of items) {
+      const row = document.createElement("div");
+      row.className = "shopping-reminder-item";
+      row.classList.toggle("is-done", item.done);
 
-    const label = document.createElement("label");
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = item.done;
-    checkbox.dataset.shoppingReminderId = item.id;
-    const text = document.createElement("span");
-    text.textContent = item.text;
-    label.append(checkbox, text);
+      const label = document.createElement("label");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = item.done;
+      checkbox.dataset.shoppingReminderId = item.id;
+      const text = document.createElement("span");
+      text.textContent = item.text;
+      label.append(checkbox, text);
 
-    const removeButton = document.createElement("button");
-    removeButton.type = "button";
-    removeButton.className = "icon-button small";
-    removeButton.dataset.shoppingReminderId = item.id;
-    removeButton.setAttribute("aria-label", `移除 ${item.text}`);
-    removeButton.textContent = "×";
+      const removeButton = document.createElement("button");
+      removeButton.type = "button";
+      removeButton.className = "icon-button small";
+      removeButton.dataset.shoppingReminderId = item.id;
+      removeButton.setAttribute("aria-label", `移除 ${item.text}`);
+      removeButton.textContent = "×";
 
-    row.append(label, removeButton);
-    els.shoppingReminderList.append(row);
+      row.append(label, removeButton);
+      group.append(row);
+    }
+    els.shoppingReminderList.append(group);
   }
   els.shoppingReminderEmpty?.classList.toggle("is-hidden", state.mealPlanner.shoppingItems.length > 0);
+}
+
+function renderShoppingCategories() {
+  if (!els.shoppingCategoryOptions) return;
+  els.shoppingCategoryOptions.replaceChildren();
+  for (const category of state.mealPlanner.shoppingCategories) {
+    const option = document.createElement("option");
+    option.value = category;
+    els.shoppingCategoryOptions.append(option);
+  }
 }
 
 function mealKey(day, meal) {
@@ -2709,12 +2816,18 @@ async function applyBackupPayload(payload, options = {}) {
       payload.mealPlanner.shoppingItems,
       payload.mealPlanner.shopping
     );
+    const fridgeSections = normalizeFridgeSections(
+      payload.mealPlanner.fridgeSections,
+      payload.mealPlanner.fridge
+    );
     state.mealPlanner = {
       meals: payload.mealPlanner.meals || {},
-      fridge: payload.mealPlanner.fridge || "",
+      fridge: fridgeSectionText(fridgeSections),
+      fridgeSections,
       ideas: payload.mealPlanner.ideas || "",
       shopping: shoppingReminderText(shoppingItems),
-      shoppingItems
+      shoppingItems,
+      shoppingCategories: normalizeShoppingCategories(payload.mealPlanner.shoppingCategories, shoppingItems)
     };
     localStorage.setItem(MEAL_PLANNER_KEY, JSON.stringify(state.mealPlanner));
     loadMealPlanner();
