@@ -430,6 +430,96 @@ select:focus {
   min-height: 180px;
 }
 
+.shopping-reminders {
+  align-content: start;
+  min-width: 0;
+}
+
+.shopping-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 8px;
+}
+
+.shopping-add-row .icon-button {
+  width: 42px;
+  height: 42px;
+  font-size: 1.25rem;
+}
+
+.shopping-reminder-list,
+.shopping-reminder-empty {
+  min-height: 132px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+}
+
+.shopping-reminder-list {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 5px;
+}
+
+.shopping-reminder-list:empty {
+  display: none;
+}
+
+.shopping-reminder-empty {
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 16px;
+  color: var(--muted);
+  font-weight: 500;
+  text-align: center;
+}
+
+.shopping-reminder-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 4px 3px 4px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.shopping-reminder-item:last-child {
+  border-bottom: 0;
+}
+
+.shopping-reminder-item label {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.shopping-reminder-item input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.shopping-reminder-item span {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.shopping-reminder-item.is-done span {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
 .meal-slot textarea {
   min-height: 66px;
   resize: vertical;

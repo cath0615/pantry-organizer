@@ -79,7 +79,8 @@ const state = {
   mealPlanner: {
     meals: {},
     ideas: "",
-    shopping: ""
+    shopping: "",
+    shoppingItems: []
   }
 };
 
@@ -109,7 +110,10 @@ const els = {
   mealDayTabs: $("mealDayTabs"),
   mealGrid: $("mealGrid"),
   mealIdeasNote: $("mealIdeasNote"),
-  shoppingNote: $("shoppingNote"),
+  shoppingItemInput: $("shoppingItemInput"),
+  addShoppingItemButton: $("addShoppingItemButton"),
+  shoppingReminderList: $("shoppingReminderList"),
+  shoppingReminderEmpty: $("shoppingReminderEmpty"),
   clearMealPlanButton: $("clearMealPlanButton"),
   clearMealIdeasButton: $("clearMealIdeasButton"),
   clearShoppingNoteButton: $("clearShoppingNoteButton"),
@@ -260,7 +264,10 @@ function bindEvents() {
   on(els.mealDayTabs, "click", switchMealDay);
   on(els.mealGrid, "input", saveMealPlanner);
   on(els.mealIdeasNote, "input", saveMealPlanner);
-  on(els.shoppingNote, "input", saveMealPlanner);
+  on(els.addShoppingItemButton, "click", addShoppingReminder);
+  on(els.shoppingItemInput, "keydown", handleShoppingReminderInput);
+  on(els.shoppingReminderList, "change", toggleShoppingReminder);
+  on(els.shoppingReminderList, "click", removeShoppingReminder);
   on(els.clearMealPlanButton, "click", clearMealPlan);
   on(els.clearMealIdeasButton, "click", clearMealIdeas);
   on(els.clearShoppingNoteButton, "click", clearShoppingNote);
@@ -409,13 +416,15 @@ function loadMealPlanner() {
   if (!els.mealGrid) return;
   try {
     const saved = JSON.parse(localStorage.getItem(MEAL_PLANNER_KEY) || "{}");
+    const shoppingItems = normalizeShoppingReminders(saved.shoppingItems, saved.shopping);
     state.mealPlanner = {
       meals: saved.meals || {},
       ideas: saved.ideas || "",
-      shopping: saved.shopping || ""
+      shopping: shoppingReminderText(shoppingItems),
+      shoppingItems
     };
   } catch {
-    state.mealPlanner = { meals: {}, ideas: "", shopping: "" };
+    state.mealPlanner = { meals: {}, ideas: "", shopping: "", shoppingItems: [] };
   }
 
   for (const input of els.mealGrid.querySelectorAll(".meal-input")) {
@@ -423,7 +432,7 @@ function loadMealPlanner() {
     input.value = state.mealPlanner.meals[key] || "";
   }
   if (els.mealIdeasNote) els.mealIdeasNote.value = state.mealPlanner.ideas;
-  if (els.shoppingNote) els.shoppingNote.value = state.mealPlanner.shopping;
+  renderShoppingReminders();
 }
 
 function saveMealPlanner() {
@@ -437,7 +446,8 @@ function saveMealPlanner() {
   state.mealPlanner = {
     meals,
     ideas: els.mealIdeasNote?.value || "",
-    shopping: els.shoppingNote?.value || ""
+    shopping: shoppingReminderText(state.mealPlanner.shoppingItems),
+    shoppingItems: state.mealPlanner.shoppingItems
   };
   localStorage.setItem(MEAL_PLANNER_KEY, JSON.stringify(state.mealPlanner));
 }
@@ -456,9 +466,94 @@ function clearMealIdeas() {
 }
 
 function clearShoppingNote() {
-  if (els.shoppingNote) els.shoppingNote.value = "";
+  state.mealPlanner.shoppingItems = [];
+  if (els.shoppingItemInput) els.shoppingItemInput.value = "";
   saveMealPlanner();
+  renderShoppingReminders();
   showToast("已清空要买");
+}
+
+function normalizeShoppingReminders(items, legacyText = "") {
+  const source = Array.isArray(items)
+    ? items
+    : String(legacyText || "").split(/\r?\n/).map((text) => ({ text, done: false }));
+  return source
+    .map((item) => (typeof item === "string" ? { text: item, done: false } : item))
+    .map((item) => ({
+      id: item.id || createId(),
+      text: String(item.text || "").trim(),
+      done: Boolean(item.done)
+    }))
+    .filter((item) => item.text);
+}
+
+function shoppingReminderText(items = []) {
+  return items.map((item) => item.text).join("\n");
+}
+
+function addShoppingReminder() {
+  const text = els.shoppingItemInput?.value.trim() || "";
+  if (!text) return;
+  state.mealPlanner.shoppingItems.push({ id: createId(), text, done: false });
+  els.shoppingItemInput.value = "";
+  saveMealPlanner();
+  renderShoppingReminders();
+  els.shoppingItemInput.focus();
+}
+
+function handleShoppingReminderInput(event) {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  addShoppingReminder();
+}
+
+function toggleShoppingReminder(event) {
+  const input = event.target.closest("input[data-shopping-reminder-id]");
+  if (!input) return;
+  const item = state.mealPlanner.shoppingItems.find((entry) => entry.id === input.dataset.shoppingReminderId);
+  if (!item) return;
+  item.done = input.checked;
+  saveMealPlanner();
+  renderShoppingReminders();
+}
+
+function removeShoppingReminder(event) {
+  const button = event.target.closest("button[data-shopping-reminder-id]");
+  if (!button) return;
+  state.mealPlanner.shoppingItems = state.mealPlanner.shoppingItems
+    .filter((item) => item.id !== button.dataset.shoppingReminderId);
+  saveMealPlanner();
+  renderShoppingReminders();
+}
+
+function renderShoppingReminders() {
+  if (!els.shoppingReminderList) return;
+  els.shoppingReminderList.replaceChildren();
+  for (const item of state.mealPlanner.shoppingItems) {
+    const row = document.createElement("div");
+    row.className = "shopping-reminder-item";
+    row.classList.toggle("is-done", item.done);
+
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = item.done;
+    checkbox.dataset.shoppingReminderId = item.id;
+    const text = document.createElement("span");
+    text.textContent = item.text;
+    label.append(checkbox, text);
+
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "icon-button small";
+    removeButton.dataset.shoppingReminderId = item.id;
+    removeButton.setAttribute("aria-label", `移除 ${item.text}`);
+    removeButton.textContent = "×";
+
+    row.append(label, removeButton);
+    els.shoppingReminderList.append(row);
+  }
+  els.shoppingReminderEmpty?.classList.toggle("is-hidden", state.mealPlanner.shoppingItems.length > 0);
 }
 
 function mealKey(day, meal) {
@@ -2604,10 +2699,15 @@ async function applyBackupPayload(payload, options = {}) {
     savePlannedRecipes();
   }
   if (payload?.mealPlanner && typeof payload.mealPlanner === "object") {
+    const shoppingItems = normalizeShoppingReminders(
+      payload.mealPlanner.shoppingItems,
+      payload.mealPlanner.shopping
+    );
     state.mealPlanner = {
       meals: payload.mealPlanner.meals || {},
       ideas: payload.mealPlanner.ideas || "",
-      shopping: payload.mealPlanner.shopping || ""
+      shopping: shoppingReminderText(shoppingItems),
+      shoppingItems
     };
     localStorage.setItem(MEAL_PLANNER_KEY, JSON.stringify(state.mealPlanner));
     loadMealPlanner();

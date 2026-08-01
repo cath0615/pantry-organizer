@@ -135,10 +135,15 @@
                 想吃什么
                 <textarea id="mealIdeasNote" rows="8" placeholder="下周想吃的菜、灵感、剩菜安排"></textarea>
               </label>
-              <label class="planner-note">
-                要买什么
-                <textarea id="shoppingNote" rows="8" placeholder="补货清单、临时想到的东西"></textarea>
-              </label>
+              <section class="planner-note shopping-reminders" aria-labelledby="shoppingRemindersTitle">
+                <span id="shoppingRemindersTitle">要买什么</span>
+                <div class="shopping-add-row">
+                  <input id="shoppingItemInput" autocomplete="off" placeholder="添加要买的东西" />
+                  <button class="icon-button" id="addShoppingItemButton" type="button" aria-label="添加要买项目">+</button>
+                </div>
+                <div class="shopping-reminder-list" id="shoppingReminderList"></div>
+                <p class="shopping-reminder-empty" id="shoppingReminderEmpty">还没有要买的东西</p>
+              </section>
             </div>
           </section>
         </div>
@@ -407,6 +412,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=62" type="module"></script>
+    <script src="./app.js?v=63" type="module"></script>
   </body>
 </html>
