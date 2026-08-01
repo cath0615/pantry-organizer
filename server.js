@@ -18,6 +18,17 @@ function getXhsPlaywright() {
   }
 }
 
+function xhsDesktopContextOptions() {
+  return {
+    headless: false,
+    viewport: { width: 1440, height: 900 },
+    locale: "zh-CN",
+    timezoneId: "Asia/Shanghai",
+    executablePath: fs.existsSync(SYSTEM_CHROME_PATH) ? SYSTEM_CHROME_PATH : undefined,
+    args: ["--disable-blink-features=AutomationControlled", "--no-first-run", "--disable-dev-shm-usage"]
+  };
+}
+
 function pickPrimaryImages(media, limit = 40) {
   const seen = new Set();
   const candidates = [];
@@ -256,20 +267,10 @@ async function handleXhsLikedRecipes(req, res) {
   let context;
   let keepSessionOpen = false;
   try {
-    const options = {
-      headless: false,
-      viewport: { width: 1440, height: 900 },
-      locale: "zh-CN",
-      timezoneId: "Asia/Shanghai",
-      args: ["--disable-blink-features=AutomationControlled", "--no-first-run", "--disable-dev-shm-usage"]
-    };
     if (xhsLikedSession?.context) {
       context = xhsLikedSession.context;
     } else {
-      context = await playwright.chromium.launchPersistentContext(PROFILE_DIR, {
-        ...options,
-        executablePath: fs.existsSync(SYSTEM_CHROME_PATH) ? SYSTEM_CHROME_PATH : undefined
-      });
+      context = await playwright.chromium.launchPersistentContext(PROFILE_DIR, xhsDesktopContextOptions());
       xhsLikedSession = { context };
     }
     const page = context.pages()[0] || (await context.newPage());
@@ -339,6 +340,80 @@ async function handleXhsLikedRecipes(req, res) {
       await context.close().catch(() => {});
       xhsLikedSession = null;
     }
+  }
+}
+
+function xhsNoteIdFromUrl(value) {
+  try {
+    const pathname = new URL(value).pathname;
+    return pathname.match(/^\/(?:explore|discovery\/item)\/([^/]+)/)?.[1]
+      || pathname.match(/^\/user\/profile\/[^/]+\/([^/]+)/)?.[1]
+      || "";
+  } catch {
+    return "";
+  }
+}
+
+async function handleXhsUnlike(req, res) {
+  const payload = await readBody(req);
+  const noteId = xhsNoteIdFromUrl(String(payload.url || "").trim());
+  if (!/^[a-zA-Z0-9]+$/.test(noteId)) {
+    sendJson(res, 400, { ok: false, error: "Invalid Xiaohongshu post URL" });
+    return;
+  }
+  const playwright = getXhsPlaywright();
+  if (!playwright) {
+    sendJson(res, 500, { ok: false, error: "Playwright is not installed" });
+    return;
+  }
+
+  let context;
+  try {
+    context = await playwright.chromium.launchPersistentContext(PROFILE_DIR, xhsDesktopContextOptions());
+    const page = context.pages()[0] || (await context.newPage());
+    const opened = await openXhsLikedPage(page, DEFAULT_XHS_LIKED_URL);
+    if (!opened) {
+      sendJson(res, 200, { ok: false, error: "没有找到点赞页面，请确认小红书仍处于登录状态" });
+      return;
+    }
+
+    let card = null;
+    for (let attempt = 0; attempt < 14; attempt += 1) {
+      const candidate = page.locator(`section.note-item[data-note-id="${noteId}"]`);
+      if (await candidate.count()) {
+        card = candidate.first();
+        break;
+      }
+      await page.mouse.wheel(0, 900).catch(() => {});
+      await page.waitForTimeout(700);
+    }
+    if (!card) {
+      sendJson(res, 200, { ok: false, error: "点赞列表中没有找到这篇帖子，可能已经取消点赞" });
+      return;
+    }
+
+    const activeLike = card.locator(".like-wrapper.like-active");
+    if (!(await activeLike.count())) {
+      sendJson(res, 200, { ok: true, alreadyUnliked: true });
+      return;
+    }
+    if (payload.dryRun === true) {
+      sendJson(res, 200, { ok: true, found: true, active: true, dryRun: true });
+      return;
+    }
+
+    await activeLike.first().click({ timeout: 10_000 });
+    await page.waitForTimeout(1200);
+    const stillActive = await card.locator(".like-wrapper.like-active").count().catch(() => 0);
+    if (stillActive) {
+      sendJson(res, 200, { ok: false, error: "取消点赞没有生效，请稍后重试" });
+      return;
+    }
+    sendJson(res, 200, { ok: true, unliked: true });
+  } catch (error) {
+    sendJson(res, 500, { ok: false, error: error.message || "取消点赞失败" });
+  } finally {
+    if (context) await context.close().catch(() => {});
   }
 }
 
@@ -682,6 +757,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "POST" && parsed.pathname === "/api/xhs-liked") {
       await handleXhsLikedRecipes(req, res);
+      return;
+    }
+    if (req.method === "POST" && parsed.pathname === "/api/xhs-unlike") {
+      await handleXhsUnlike(req, res);
       return;
     }
     serveStatic(req, res);
