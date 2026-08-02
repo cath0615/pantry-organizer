@@ -7,6 +7,7 @@ const PORT = Number(process.env.PORT || 5173);
 const PUBLIC_DIR = __dirname;
 const XHS_PROJECT_DIR = process.env.XHS_READER_DIR || "/Users/josh/Documents/Codex/2026-06-26/wo";
 const DEFAULT_XHS_LIKED_URL = "https://www.xiaohongshu.com/user/profile/5909e6ed82ec39715860d419?tab=liked";
+const ENABLE_XHS_UNLIKE = false;
 const { readXhsWithPlaywright, PROFILE_DIR, SYSTEM_CHROME_PATH } = require(path.join(XHS_PROJECT_DIR, "xhs-reader"));
 let xhsLikedSession = null;
 
@@ -760,6 +761,10 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.method === "POST" && parsed.pathname === "/api/xhs-unlike") {
+      if (!ENABLE_XHS_UNLIKE) {
+        sendJson(res, 403, { ok: false, error: "自动取消点赞已关闭" });
+        return;
+      }
       await handleXhsUnlike(req, res);
       return;
     }

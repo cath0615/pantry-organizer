@@ -943,7 +943,7 @@ async function fetchLikedRecipes() {
     await saveRecipeLinkBatch(
       data.items.map((item) => `${item.title || ""} ${item.url}`).join("\n"),
       urls,
-      { unlikeAfterSave: true }
+      { unlikeAfterSave: false }
     );
   } catch {
     showToast("读取点赞失败，请确认 npm start 和小红书登录状态");
@@ -955,25 +955,6 @@ async function fetchLikedRecipes() {
 function getLikedRecipesEndpoint() {
   if (["localhost", "127.0.0.1"].includes(window.location.hostname)) return `${window.location.origin}/api/xhs-liked`;
   return "http://127.0.0.1:5173/api/xhs-liked";
-}
-
-function getXhsUnlikeEndpoint() {
-  if (["localhost", "127.0.0.1"].includes(window.location.hostname)) return `${window.location.origin}/api/xhs-unlike`;
-  return "http://127.0.0.1:5173/api/xhs-unlike";
-}
-
-async function unlikeXhsRecipe(url) {
-  try {
-    const response = await fetch(getXhsUnlikeEndpoint(), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ url })
-    });
-    const data = await response.json();
-    return Boolean(response.ok && data.ok);
-  } catch {
-    return false;
-  }
 }
 
 async function saveRecipeLinkBatch(text, urls, options = {}) {
@@ -1717,28 +1698,21 @@ async function handleRecipeSubmit(event) {
     state.recipes.unshift(recipe);
     clearRecipeLinkInput();
   }
-  const unlikeUrl = state.currentRecipeDraft?.unlikeAfterSave ? recipe.url : "";
   saveRecipes();
   const isBatchConfirming = Boolean(state.currentRecipeDraft) || state.recipeConfirmTotal > 0;
   state.currentRecipeDraft = null;
   state.recipeDialogSnapshot = "";
   els.recipeDialog.close();
   renderRecipes();
-  let unlikeSucceeded = null;
-  if (unlikeUrl) {
-    showToast("菜谱已保存，正在取消小红书点赞");
-    unlikeSucceeded = await unlikeXhsRecipe(unlikeUrl);
-  }
   if (state.recipeConfirmQueue.length) {
     await saveRecipeConfirmQueue();
-    const status = unlikeSucceeded === false ? "已保存，但取消点赞失败" : unlikeSucceeded ? "已保存并取消点赞" : "已保存";
-    showToast(`${status}，剩余 ${state.recipeConfirmQueue.length} 个待确认`);
+    showToast(`已保存，剩余 ${state.recipeConfirmQueue.length} 个待确认`);
     window.setTimeout(openNextRecipeDraft, 120);
   } else if (isBatchConfirming) {
     state.recipeConfirmTotal = 0;
     await clearRecipeConfirmQueueStorage();
     updateResumeRecipeConfirmButton();
-    showToast(unlikeSucceeded === false ? "菜谱已保存，但取消点赞失败" : "批量确认完成");
+    showToast("批量确认完成");
   } else {
     showToast("菜谱已保存");
   }
