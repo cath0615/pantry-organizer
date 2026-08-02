@@ -9,7 +9,7 @@
 - 物品图片，支持手机拍照/选图
 - 一周三餐计划和两个本地备忘录
 - Recipe tab：保存小红书链接、分类筛选、搜索、手动菜谱、封面和 JSON 导入导出
-- 电脑本地运行 `npm start` 时，可复用本机小红书 Playwright profile 抓取菜谱标题和封面
+- 电脑本地运行 `npm start` 时，分享链接默认用独立访客 profile 抓取，也可手动切换到登录 profile
 - JSON 文本导出/导入备份
 
 ## Local Recipe Capture
@@ -22,7 +22,7 @@ npm start
 
 然后打开 [http://localhost:5173](http://localhost:5173)。
 
-这个本地模式会调用 `/api/xhs-preview`，复用 `/Users/josh/Documents/Codex/2026-06-26/wo/xhs-reader.js` 和对应的小红书浏览器 profile 抓取标题/封面。GitHub Pages 版本仍然可以查看、搜索、打开链接和手动编辑。
+这个本地模式会调用 `/api/xhs-preview` 抓取标题、正文和图片。“访客抓取”使用项目内独立的 `.xhs-guest-profile`，每次抓取前清除 Cookie，且该目录不会提交到 GitHub；只有手动选择“登录抓取”时才会复用 `/Users/josh/Documents/Codex/2026-06-26/wo/xhs-reader.js` 对应的登录 profile。“抓取我的点赞”仍需要登录模式。GitHub Pages 版本仍然可以查看、搜索、打开链接和手动编辑。
 
 ## GitHub Pages
 

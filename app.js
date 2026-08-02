@@ -13,6 +13,7 @@ const MEAL_PLANNER_KEY = "pantry-organizer-meal-planner";
 const RECIPES_KEY = "pantry-organizer-recipes";
 const RECIPE_QUEUE_KEY = "pantry-organizer-recipe-confirm-queue";
 const PLANNED_RECIPES_KEY = "pantry-organizer-planned-recipes";
+const RECIPE_FETCH_MODE_KEY = "pantry-organizer-recipe-fetch-mode";
 const SYNC_SETTINGS_KEY = "pantry-organizer-github-sync";
 const DEFAULT_SYNC_OWNER = "cath0615";
 const DEFAULT_SYNC_REPO = "pantry-organizer-data";
@@ -75,6 +76,7 @@ const state = {
   recipeTag: "all",
   recipeSort: "updatedDesc",
   recipeView: "library",
+  recipeFetchMode: "guest",
   recipeConfirmQueue: [],
   recipeConfirmTotal: 0,
   currentRecipeDraft: null,
@@ -135,6 +137,7 @@ const els = {
   clearMealIdeasButton: $("clearMealIdeasButton"),
   clearShoppingNoteButton: $("clearShoppingNoteButton"),
   recipeLinkInput: $("recipeLinkInput"),
+  recipeFetchMode: $("recipeFetchMode"),
   recipeSubTabs: $("recipeSubTabs"),
   saveRecipeLinkButton: $("saveRecipeLinkButton"),
   clearRecipeLinkButton: $("clearRecipeLinkButton"),
@@ -229,6 +232,7 @@ async function init() {
   loadCategories();
   loadLocations();
   loadSyncSettings();
+  loadRecipeFetchMode();
   renderMealPlanner();
   loadMealPlanner();
   loadPlannedRecipes();
@@ -297,6 +301,7 @@ function bindEvents() {
   on(els.fetchLikedRecipesButton, "click", fetchLikedRecipes);
   on(els.resumeRecipeConfirmButton, "click", resumeRecipeConfirmQueue);
   on(els.recipeSubTabs, "click", switchRecipeView);
+  on(els.recipeFetchMode, "click", switchRecipeFetchMode);
   on(els.clearRecipeLinkButton, "click", clearRecipeLinkInput);
   on(els.addRecipeButton, "click", () => openRecipeDialog());
   on(els.recipeSearchInput, "input", () => {
@@ -856,6 +861,30 @@ function savePlannedRecipes() {
   localStorage.setItem(PLANNED_RECIPES_KEY, JSON.stringify(state.plannedRecipes));
 }
 
+function loadRecipeFetchMode() {
+  const saved = localStorage.getItem(RECIPE_FETCH_MODE_KEY);
+  state.recipeFetchMode = saved === "login" ? "login" : "guest";
+  renderRecipeFetchMode();
+}
+
+function switchRecipeFetchMode(event) {
+  const button = event.target.closest("button[data-fetch-mode]");
+  if (!button) return;
+  state.recipeFetchMode = button.dataset.fetchMode === "login" ? "login" : "guest";
+  localStorage.setItem(RECIPE_FETCH_MODE_KEY, state.recipeFetchMode);
+  renderRecipeFetchMode();
+  showToast(state.recipeFetchMode === "guest" ? "分享链接将使用访客抓取" : "分享链接将使用登录抓取");
+}
+
+function renderRecipeFetchMode() {
+  if (!els.recipeFetchMode) return;
+  for (const button of els.recipeFetchMode.querySelectorAll("button[data-fetch-mode]")) {
+    const isActive = button.dataset.fetchMode === state.recipeFetchMode;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  }
+}
+
 function switchRecipeView(event) {
   const button = event.target.closest("button[data-recipe-view]");
   if (!button) return;
@@ -943,7 +972,7 @@ async function fetchLikedRecipes() {
     await saveRecipeLinkBatch(
       data.items.map((item) => `${item.title || ""} ${item.url}`).join("\n"),
       urls,
-      { unlikeAfterSave: false }
+      { unlikeAfterSave: false, fetchMode: "login" }
     );
   } catch {
     showToast("读取点赞失败，请确认 npm start 和小红书登录状态");
@@ -974,7 +1003,7 @@ async function saveRecipeLinkBatch(text, urls, options = {}) {
       }
     }
     showToast(`${existing ? "正在重新抓取" : "正在抓"} 第 ${index + 1}/${urls.length} 个`);
-    const preview = await fetchRecipePreview(url, { quiet: true });
+    const preview = await fetchRecipePreview(url, { quiet: true, mode: options.fetchMode });
     if (!preview) {
       failed += 1;
       continue;
@@ -1216,7 +1245,7 @@ async function fetchRecipePreview(url, options = {}) {
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, mode: options.mode || state.recipeFetchMode }),
         signal: controller.signal
       });
       window.clearTimeout(timer);

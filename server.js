@@ -9,6 +9,7 @@ const XHS_PROJECT_DIR = process.env.XHS_READER_DIR || "/Users/josh/Documents/Cod
 const DEFAULT_XHS_LIKED_URL = "https://www.xiaohongshu.com/user/profile/5909e6ed82ec39715860d419?tab=liked";
 const ENABLE_XHS_UNLIKE = false;
 const { readXhsWithPlaywright, PROFILE_DIR, SYSTEM_CHROME_PATH } = require(path.join(XHS_PROJECT_DIR, "xhs-reader"));
+const { readXhsAsGuest } = require("./xhs-guest-reader");
 let xhsLikedSession = null;
 
 function getXhsPlaywright() {
@@ -128,12 +129,20 @@ function serveStatic(req, res) {
 async function handleXhsPreview(req, res) {
   const payload = await readBody(req);
   const url = String(payload.url || "").trim();
+  const mode = payload.mode === "login" ? "login" : "guest";
   if (!/^https?:\/\//.test(url)) {
     sendJson(res, 400, { ok: false, error: "Invalid URL" });
     return;
   }
 
-  const result = await readXhsWithPlaywright(url, { sourceType: "article", settleMs: 6000 });
+  const result = mode === "login"
+    ? await readXhsWithPlaywright(url, { sourceType: "article", settleMs: 6000 })
+    : await readXhsAsGuest(url, {
+      sourceType: "article",
+      settleMs: 6000,
+      playwright: getXhsPlaywright(),
+      executablePath: fs.existsSync(SYSTEM_CHROME_PATH) ? SYSTEM_CHROME_PATH : undefined
+    });
   const imageOptions = pickPrimaryImages(result.media, 40);
   const coverUrl = imageOptions[0] || "";
   const coverData = coverUrl ? await imageUrlToDataUrl(coverUrl).catch(() => "") : "";
@@ -148,6 +157,7 @@ async function handleXhsPreview(req, res) {
     ingredients: recipeText.ingredients,
     steps: recipeText.steps,
     rawText: recipeText.rawText,
+    fetchMode: mode,
     error: result.error || ""
   });
 }

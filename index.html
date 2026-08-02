@@ -171,6 +171,10 @@
               rows="4"
               placeholder="粘贴 1 个或多个小红书分享文案/链接"
             ></textarea>
+            <div class="recipe-fetch-mode segmented" id="recipeFetchMode" role="group" aria-label="分享链接抓取模式">
+              <button class="is-active" type="button" data-fetch-mode="guest" aria-pressed="true">访客抓取</button>
+              <button type="button" data-fetch-mode="login" aria-pressed="false">登录抓取</button>
+            </div>
             <div class="capture-actions">
               <button class="primary-button" id="saveRecipeLinkButton" type="button">抓取保存</button>
               <button class="ghost-button" id="clearRecipeLinkButton" type="button">清空</button>
@@ -420,6 +424,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=68" type="module"></script>
+    <script src="./app.js?v=69" type="module"></script>
   </body>
 </html>

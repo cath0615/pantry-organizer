@@ -301,6 +301,10 @@ select:focus {
   box-shadow: 0 1px 7px rgba(67, 48, 28, 0.1);
 }
 
+.recipe-fetch-mode {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
