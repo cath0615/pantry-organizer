@@ -180,6 +180,7 @@ const els = {
   recipeIngredients: $("recipeIngredients"),
   recipeSteps: $("recipeSteps"),
   recipeNotes: $("recipeNotes"),
+  skipRecipeDraftButton: $("skipRecipeDraftButton"),
   deleteRecipeButton: $("deleteRecipeButton"),
   closeRecipeDialogButton: $("closeRecipeDialogButton"),
   totalCount: $("totalCount"),
@@ -324,6 +325,7 @@ function bindEvents() {
   on(els.recipeList, "click", handleRecipeListAction);
   on(els.plannedRecipeList, "click", handlePlannedRecipeAction);
   on(els.plannedRecipeList, "input", updatePlannedRecipeDetails);
+  on(els.skipRecipeDraftButton, "click", skipCurrentRecipeDraft);
   on(els.deleteRecipeButton, "click", deleteCurrentRecipe);
   on(els.closeRecipeDialogButton, "click", closeRecipeDialog);
   on(els.recipeCoverInput, "change", handleRecipeCoverInput);
@@ -1168,6 +1170,29 @@ async function pauseRecipeConfirmQueue() {
   showToast(`已暂停，${state.recipeConfirmQueue.length} 个待确认菜谱已保留`);
 }
 
+async function skipCurrentRecipeDraft() {
+  if (!state.currentRecipeDraft) return;
+  const title = els.recipeTitle.value.trim() || "当前菜谱";
+  const confirmed = window.confirm(`确定跳过“${title}”吗？\n\n这条菜谱不会保存，也不会再出现在待确认列表。`);
+  if (!confirmed) return;
+
+  state.currentRecipeDraft = null;
+  state.recipeDialogSnapshot = "";
+  els.recipeDialog.close();
+
+  if (state.recipeConfirmQueue.length) {
+    await saveRecipeConfirmQueue();
+    showToast(`已跳过，剩余 ${state.recipeConfirmQueue.length} 个待确认`);
+    window.setTimeout(openNextRecipeDraft, 120);
+    return;
+  }
+
+  state.recipeConfirmTotal = 0;
+  await clearRecipeConfirmQueueStorage();
+  updateResumeRecipeConfirmButton();
+  showToast("已跳过，待确认菜谱已清空");
+}
+
 function resumeRecipeConfirmQueue() {
   if (!state.recipeConfirmQueue.length || els.recipeDialog.open) return;
   openNextRecipeDraft();
@@ -1689,6 +1714,7 @@ function openRecipeDialog(recipe = null, options = {}) {
   if (els.recipeCoverInput) els.recipeCoverInput.value = "";
   if (els.recipePhotoInput) els.recipePhotoInput.value = "";
   renderRecipePhotoGallery();
+  els.skipRecipeDraftButton.classList.toggle("is-hidden", !state.currentRecipeDraft);
   els.deleteRecipeButton.classList.toggle("is-hidden", !isEditing);
   state.recipeDialogSnapshot = getRecipeDialogValues();
   els.recipeDialog.showModal();
