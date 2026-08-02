@@ -541,6 +541,22 @@ select:focus {
   border-bottom: 1px solid var(--line);
 }
 
+.shopping-reminder-item-actions {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
+  padding: 0 2px 4px 26px;
+}
+
+.shopping-reminder-item-actions input,
+.shopping-reminder-item-actions select {
+  min-width: 0;
+  min-height: 34px;
+  padding: 5px 8px;
+  font-size: 0.8rem;
+}
+
 .shopping-reminder-item:last-child {
   border-bottom: 0;
 }
@@ -559,6 +575,12 @@ select:focus {
   height: 18px;
   margin: 0;
   accent-color: var(--accent);
+}
+
+.shopping-reminder-item-actions input {
+  width: 100%;
+  height: auto;
+  margin: 0;
 }
 
 .shopping-reminder-item span {

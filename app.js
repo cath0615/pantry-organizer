@@ -278,7 +278,9 @@ function bindEvents() {
   on(els.mealIdeasNote, "input", saveMealPlanner);
   on(els.addShoppingItemButton, "click", addShoppingReminder);
   on(els.shoppingItemInput, "keydown", handleShoppingReminderInput);
-  on(els.shoppingReminderList, "change", toggleShoppingReminder);
+  on(els.shoppingReminderList, "change", handleShoppingReminderChange);
+  on(els.shoppingReminderList, "focusout", handleShoppingCategoryBlur);
+  on(els.shoppingReminderList, "keydown", handleShoppingCategoryKeydown);
   on(els.shoppingReminderList, "click", removeShoppingReminder);
   on(els.clearMealPlanButton, "click", clearMealPlan);
   on(els.clearMealIdeasButton, "click", clearMealIdeas);
@@ -599,14 +601,72 @@ function handleShoppingReminderInput(event) {
   addShoppingReminder();
 }
 
-function toggleShoppingReminder(event) {
+function handleShoppingReminderChange(event) {
   const input = event.target.closest("input[data-shopping-reminder-id]");
-  if (!input) return;
-  const item = state.mealPlanner.shoppingItems.find((entry) => entry.id === input.dataset.shoppingReminderId);
-  if (!item) return;
-  item.done = input.checked;
+  if (input) {
+    const item = state.mealPlanner.shoppingItems.find((entry) => entry.id === input.dataset.shoppingReminderId);
+    if (!item) return;
+    item.done = input.checked;
+    saveMealPlanner();
+    renderShoppingReminders();
+    return;
+  }
+
+  const categoryInput = event.target.closest("input[data-shopping-category-id]");
+  if (categoryInput) {
+    changeShoppingReminderCategory(categoryInput.dataset.shoppingCategoryId, categoryInput.value);
+    return;
+  }
+
+  const fridgeSelect = event.target.closest("select[data-shopping-fridge-id]");
+  if (fridgeSelect?.value) moveShoppingReminderToFridge(fridgeSelect.dataset.shoppingFridgeId, fridgeSelect.value);
+}
+
+function handleShoppingCategoryBlur(event) {
+  const input = event.target.closest("input[data-shopping-category-id]");
+  if (input) changeShoppingReminderCategory(input.dataset.shoppingCategoryId, input.value);
+}
+
+function handleShoppingCategoryKeydown(event) {
+  const input = event.target.closest("input[data-shopping-category-id]");
+  if (!input || event.key !== "Enter") return;
+  event.preventDefault();
+  changeShoppingReminderCategory(input.dataset.shoppingCategoryId, input.value);
+}
+
+function changeShoppingReminderCategory(itemId, nextCategory) {
+  const item = state.mealPlanner.shoppingItems.find((entry) => entry.id === itemId);
+  const category = String(nextCategory || "").trim();
+  if (!item || !category) {
+    renderShoppingReminders();
+    return;
+  }
+  item.category = category;
+  state.mealPlanner.shoppingCategories = normalizeShoppingCategories(
+    [...state.mealPlanner.shoppingCategories, category],
+    state.mealPlanner.shoppingItems
+  );
   saveMealPlanner();
+  renderShoppingCategories();
   renderShoppingReminders();
+}
+
+function moveShoppingReminderToFridge(itemId, fridgeCategory) {
+  const item = state.mealPlanner.shoppingItems.find((entry) => entry.id === itemId);
+  if (!item || !FRIDGE_CATEGORIES.includes(fridgeCategory)) return;
+  const currentText = state.mealPlanner.fridgeSections[fridgeCategory] || "";
+  const currentItems = currentText.split(/\r?\n/).map((text) => text.trim()).filter(Boolean);
+  const isDuplicate = currentItems.includes(item.text);
+  if (!isDuplicate) {
+    state.mealPlanner.fridgeSections[fridgeCategory] = [currentText.trimEnd(), item.text].filter(Boolean).join("\n");
+  }
+  state.mealPlanner.shoppingItems = state.mealPlanner.shoppingItems.filter((entry) => entry.id !== itemId);
+  saveMealPlanner();
+  renderFridgeCategories();
+  renderShoppingReminders();
+  showToast(isDuplicate
+    ? `${item.text} 已在冰箱快用，已从购物清单移除`
+    : `${item.text} 已移到冰箱快用 · ${fridgeCategory}`);
 }
 
 function removeShoppingReminder(event) {
@@ -651,7 +711,25 @@ function renderShoppingReminders() {
       removeButton.setAttribute("aria-label", `移除 ${item.text}`);
       removeButton.textContent = "×";
 
-      row.append(label, removeButton);
+      const actions = document.createElement("div");
+      actions.className = "shopping-reminder-item-actions";
+
+      const categoryInput = document.createElement("input");
+      categoryInput.value = item.category;
+      categoryInput.setAttribute("list", "shoppingCategoryOptions");
+      categoryInput.dataset.shoppingCategoryId = item.id;
+      categoryInput.setAttribute("aria-label", `修改 ${item.text} 的购物分类`);
+
+      const fridgeSelect = document.createElement("select");
+      fridgeSelect.dataset.shoppingFridgeId = item.id;
+      fridgeSelect.setAttribute("aria-label", `将 ${item.text} 移到冰箱快用`);
+      fridgeSelect.append(new Option("移到冰箱…", ""));
+      for (const fridgeCategory of FRIDGE_CATEGORIES) {
+        fridgeSelect.append(new Option(fridgeCategory, fridgeCategory));
+      }
+
+      actions.append(categoryInput, fridgeSelect);
+      row.append(label, removeButton, actions);
       group.append(row);
     }
     els.shoppingReminderList.append(group);
