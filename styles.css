@@ -435,9 +435,9 @@ select:focus {
   min-width: 0;
 }
 
+.fridge-storage-tabs,
 .fridge-category-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 3px;
   padding: 3px;
   border: 1px solid var(--line);
@@ -445,6 +445,15 @@ select:focus {
   background: #eee2d1;
 }
 
+.fridge-storage-tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.fridge-category-tabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fridge-storage-tabs button,
 .fridge-category-tabs button {
   min-height: 30px;
   border-radius: 6px;
@@ -455,6 +464,11 @@ select:focus {
   padding: 2px 4px;
 }
 
+.fridge-storage-tabs button {
+  font-size: 0.82rem;
+}
+
+.fridge-storage-tabs button.is-active,
 .fridge-category-tabs button.is-active {
   background: var(--surface-strong);
   color: var(--ink);
@@ -462,7 +476,7 @@ select:focus {
 }
 
 .fridge-reminders textarea {
-  min-height: 138px;
+  min-height: 104px;
 }
 
 .shopping-reminders {
