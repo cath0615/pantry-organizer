@@ -23,9 +23,12 @@ async function readXhsAsGuest(url, options = {}) {
   try {
     context = await playwright.chromium.launchPersistentContext(GUEST_PROFILE_DIR, {
       headless: false,
-      viewport: { width: 1280, height: 900 },
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
       locale: "zh-CN",
       timezoneId: "Asia/Shanghai",
+      userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
       executablePath: options.executablePath,
       args: ["--no-first-run", "--disable-dev-shm-usage"]
     });
@@ -81,7 +84,7 @@ async function readXhsAsGuest(url, options = {}) {
       media: snapshot.media,
       videoUrls: [...videoUrls].slice(0, 20),
       sourceType: hasVideo ? "video" : options.sourceType || "article",
-      browser: "guest-system-chrome",
+      browser: "guest-mobile-system-chrome",
       error: "",
       code: "OK"
     };
@@ -150,4 +153,3 @@ function cleanXhsText(text) {
 }
 
 module.exports = { GUEST_PROFILE_DIR, readXhsAsGuest };
-

@@ -22,7 +22,7 @@ npm start
 
 然后打开 [http://localhost:5173](http://localhost:5173)。
 
-这个本地模式会调用 `/api/xhs-preview` 抓取标题、正文和图片。“访客抓取”使用项目内独立的 `.xhs-guest-profile`，每次抓取前清除 Cookie，且该目录不会提交到 GitHub；只有手动选择“登录抓取”时才会复用 `/Users/josh/Documents/Codex/2026-06-26/wo/xhs-reader.js` 对应的登录 profile。“抓取我的点赞”仍需要登录模式。GitHub Pages 版本仍然可以查看、搜索、打开链接和手动编辑。
+这个本地模式会调用 `/api/xhs-preview` 抓取标题、正文和图片。“访客抓取”沿用原来的手机尺寸和 iPhone 页面结构，但使用项目内独立的 `.xhs-guest-profile`，每次抓取前清除 Cookie，且该目录不会提交到 GitHub；只有手动选择“登录抓取”时才会复用 `/Users/josh/Documents/Codex/2026-06-26/wo/xhs-reader.js` 对应的登录 profile。“抓取我的点赞”仍需要登录模式。GitHub Pages 版本仍然可以查看、搜索、打开链接和手动编辑。
 
 ## GitHub Pages
 
