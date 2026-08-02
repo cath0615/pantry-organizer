@@ -8,7 +8,7 @@ const PUBLIC_DIR = __dirname;
 const XHS_PROJECT_DIR = process.env.XHS_READER_DIR || "/Users/josh/Documents/Codex/2026-06-26/wo";
 const DEFAULT_XHS_LIKED_URL = "https://www.xiaohongshu.com/user/profile/5909e6ed82ec39715860d419?tab=liked";
 const ENABLE_XHS_UNLIKE = false;
-const { readXhsWithPlaywright, PROFILE_DIR, SYSTEM_CHROME_PATH } = require(path.join(XHS_PROJECT_DIR, "xhs-reader"));
+const { PROFILE_DIR, SYSTEM_CHROME_PATH } = require(path.join(XHS_PROJECT_DIR, "xhs-reader"));
 const { readXhsAsGuest } = require("./xhs-guest-reader");
 let xhsLikedSession = null;
 
@@ -142,14 +142,14 @@ async function handleXhsPreview(req, res) {
     return;
   }
 
-  const result = mode === "login"
-    ? await readXhsWithPlaywright(url, { sourceType: "article", settleMs: 6000 })
-    : await readXhsAsGuest(url, {
-      sourceType: "article",
-      settleMs: 6000,
-      playwright: getXhsPlaywright(),
-      executablePath: fs.existsSync(SYSTEM_CHROME_PATH) ? SYSTEM_CHROME_PATH : undefined
-    });
+  const result = await readXhsAsGuest(url, {
+    sourceType: "article",
+    settleMs: 6000,
+    playwright: getXhsPlaywright(),
+    executablePath: fs.existsSync(SYSTEM_CHROME_PATH) ? SYSTEM_CHROME_PATH : undefined,
+    profileDir: mode === "login" ? PROFILE_DIR : undefined,
+    clearCookies: mode !== "login"
+  });
   const imageOptions = pickPrimaryImages(result.media, 40);
   const coverUrl = imageOptions[0] || "";
   const coverData = coverUrl ? await imageUrlToDataUrl(coverUrl).catch(() => "") : "";

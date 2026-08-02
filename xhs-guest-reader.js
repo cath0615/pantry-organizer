@@ -18,10 +18,12 @@ async function readXhsAsGuest(url, options = {}) {
     };
   }
 
-  fs.mkdirSync(GUEST_PROFILE_DIR, { recursive: true });
+  const profileDir = options.profileDir || GUEST_PROFILE_DIR;
+  const isGuest = options.clearCookies !== false;
+  fs.mkdirSync(profileDir, { recursive: true });
   let context;
   try {
-    context = await playwright.chromium.launchPersistentContext(GUEST_PROFILE_DIR, {
+    context = await playwright.chromium.launchPersistentContext(profileDir, {
       headless: false,
       viewport: { width: 390, height: 844 },
       isMobile: true,
@@ -30,9 +32,13 @@ async function readXhsAsGuest(url, options = {}) {
       timezoneId: "Asia/Shanghai",
       userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
       executablePath: options.executablePath,
-      args: ["--no-first-run", "--disable-dev-shm-usage"]
+      args: [
+        ...(!isGuest ? ["--disable-blink-features=AutomationControlled"] : []),
+        "--no-first-run",
+        "--disable-dev-shm-usage"
+      ]
     });
-    await context.clearCookies();
+    if (isGuest) await context.clearCookies();
 
     const page = context.pages()[0] || (await context.newPage());
     const videoUrls = new Set();
@@ -90,7 +96,7 @@ async function readXhsAsGuest(url, options = {}) {
       media: snapshot.media,
       videoUrls: [...videoUrls].slice(0, 20),
       sourceType: hasVideo ? "video" : options.sourceType || "article",
-      browser: "guest-mobile-system-chrome",
+      browser: isGuest ? "guest-mobile-system-chrome" : "login-mobile-system-chrome",
       error: "",
       code: "OK"
     };
