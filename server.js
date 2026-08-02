@@ -43,6 +43,13 @@ function pickPrimaryImages(media, limit = 40) {
     if (!item) continue;
     if (item.tag === "video") {
       sawVideo = true;
+      const poster = String(item.poster || "").replace(/^http:/i, "https:");
+      if (poster.includes("xhscdn.com") && !seen.has(poster)) {
+        seen.add(poster);
+        candidates.push(poster);
+        sawPrimaryImage = true;
+        if (candidates.length >= limit) break;
+      }
       continue;
     }
     if (item.tag !== "img" || !item.src) continue;
