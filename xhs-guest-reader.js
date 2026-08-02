@@ -55,6 +55,8 @@ async function readXhsAsGuest(url, options = {}) {
       const meta = (name) => document.querySelector(`meta[property="${name}"]`)?.getAttribute("content")
         || document.querySelector(`meta[name="${name}"]`)?.getAttribute("content")
         || "";
+      const noteState = window.__INITIAL_STATE__?.noteData;
+      const post = noteState?.data?.noteData || noteState?.normalNotePreloadData || {};
       const media = Array.from(document.querySelectorAll("img, video, source"))
         .map((node) => ({
           tag: node.tagName.toLowerCase(),
@@ -67,6 +69,8 @@ async function readXhsAsGuest(url, options = {}) {
       return {
         title: document.title || meta("og:title") || meta("twitter:title"),
         description: meta("description") || meta("og:description"),
+        postTitle: typeof post.title === "string" ? post.title : "",
+        postDescription: typeof post.desc === "string" ? post.desc : "",
         bodyText: document.body ? document.body.innerText : "",
         canonical: document.querySelector('link[rel="canonical"]')?.href || location.href,
         url: location.href,
@@ -74,7 +78,9 @@ async function readXhsAsGuest(url, options = {}) {
       };
     });
 
-    const text = cleanXhsText([snapshot.title, snapshot.description, snapshot.bodyText].join("\n"));
+    const text = snapshot.postDescription
+      ? preservePostText([snapshot.postTitle || snapshot.title, snapshot.postDescription].filter(Boolean).join("\n"))
+      : cleanXhsText([snapshot.title, snapshot.description, snapshot.bodyText].join("\n"));
     const hasVideo = snapshot.media.some((item) => item.tag === "video" || item.src.includes(".mp4") || item.poster);
     return {
       ok: text.length > 0,
@@ -110,6 +116,14 @@ async function gentleScroll(page) {
     await page.mouse.wheel(0, 520).catch(() => {});
     await page.waitForTimeout(650);
   }
+}
+
+function preservePostText(text) {
+  return String(text || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/^[ \t]+$/gm, "")
+    .replace(/[ \t]+$/gm, "")
+    .trim();
 }
 
 function cleanXhsText(text) {

@@ -473,7 +473,7 @@ function removeTrailingPostMetadata(text) {
   let cleaned = String(text || "").trim();
   cleaned = cleaned.replace(/\s+(?:\d+\s*(?:分钟前|小时前|天前)|刚刚|昨天|前天)\s*$/, "").trim();
   cleaned = cleaned.replace(/\s+\d{4}[-/.]\d{1,2}[-/.]\d{1,2}\s*$/, "").trim();
-  cleaned = cleaned.replace(/\s*#[^\s#]+(?:\s*#[^\s#]+)*\s*$/, "").trim();
+  cleaned = cleaned.replace(/\s*#[^\s#]+#?(?:\s+#[^\s#]+#?)*\s*$/, "").trim();
   return cleaned;
 }
 
