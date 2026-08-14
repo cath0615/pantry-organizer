@@ -36,6 +36,7 @@ const FRIDGE_STORAGE_TYPES = [
   { id: "frozen", label: "冷冻" }
 ];
 const FRIDGE_CATEGORIES = ["蔬菜", "水果", "奶制品", "蛋/豆制品", "肉/海鲜", "其他"];
+const ALL_FRIDGE_CATEGORIES = "all";
 const DEFAULT_SHOPPING_CATEGORY = "未分类";
 const MEAL_SLOTS = [
   { id: "breakfast", label: "早饭" },
@@ -71,7 +72,9 @@ const state = {
   fullBackupText: "",
   activeMealDay: WEEK_DAYS[0],
   activeFridgeStorage: FRIDGE_STORAGE_TYPES[0].id,
-  activeFridgeCategory: FRIDGE_CATEGORIES[0],
+  activeFridgeCategory: ALL_FRIDGE_CATEGORIES,
+  fridgeQuery: "",
+  editingFridgeItemId: "",
   recipes: [],
   recipeQuery: "",
   recipeTag: "all",
@@ -92,6 +95,8 @@ const state = {
     fridge: "",
     fridgeSections: {},
     fridgeStorage: {},
+    fridgeItems: {},
+    fridgeCategories: [...FRIDGE_CATEGORIES],
     ideas: "",
     shopping: "",
     shoppingItems: [],
@@ -126,7 +131,13 @@ const els = {
   mealGrid: $("mealGrid"),
   fridgeStorageTabs: $("fridgeStorageTabs"),
   fridgeCategoryTabs: $("fridgeCategoryTabs"),
-  fridgeNote: $("fridgeNote"),
+  fridgeSearchInput: $("fridgeSearchInput"),
+  fridgeCategoryInput: $("fridgeCategoryInput"),
+  fridgeCategoryOptions: $("fridgeCategoryOptions"),
+  fridgeItemInput: $("fridgeItemInput"),
+  addFridgeItemButton: $("addFridgeItemButton"),
+  fridgeItemList: $("fridgeItemList"),
+  fridgeItemEmpty: $("fridgeItemEmpty"),
   mealIdeasNote: $("mealIdeasNote"),
   shoppingCategoryInput: $("shoppingCategoryInput"),
   shoppingCategoryOptions: $("shoppingCategoryOptions"),
@@ -288,7 +299,11 @@ function bindEvents() {
   on(els.mealGrid, "input", saveMealPlanner);
   on(els.fridgeStorageTabs, "click", switchFridgeStorage);
   on(els.fridgeCategoryTabs, "click", switchFridgeCategory);
-  on(els.fridgeNote, "input", saveFridgeNote);
+  on(els.fridgeSearchInput, "input", handleFridgeSearch);
+  on(els.addFridgeItemButton, "click", addFridgeItem);
+  on(els.fridgeItemInput, "keydown", handleFridgeItemInput);
+  on(els.fridgeItemList, "click", handleFridgeItemAction);
+  on(els.fridgeItemList, "keydown", handleFridgeEditorKeydown);
   on(els.mealIdeasNote, "input", saveMealPlanner);
   on(els.addShoppingItemButton, "click", addShoppingReminder);
   on(els.shoppingItemInput, "keydown", handleShoppingReminderInput);
@@ -448,11 +463,16 @@ function loadMealPlanner() {
     const saved = JSON.parse(localStorage.getItem(MEAL_PLANNER_KEY) || "{}");
     const shoppingItems = normalizeShoppingReminders(saved.shoppingItems, saved.shopping);
     const fridgeStorage = normalizeFridgeStorage(saved.fridgeStorage, saved.fridgeSections, saved.fridge);
+    const fridgeItems = normalizeFridgeItems(saved.fridgeItems, fridgeStorage);
+    const fridgeCategories = normalizeFridgeCategories(saved.fridgeCategories, fridgeItems);
+    const compatibleFridgeStorage = fridgeItemsToStorage(fridgeItems, fridgeCategories);
     state.mealPlanner = {
       meals: saved.meals || {},
-      fridge: fridgeSectionText(fridgeStorage.chilled),
-      fridgeSections: fridgeStorage.chilled,
-      fridgeStorage,
+      fridge: fridgeSectionText(compatibleFridgeStorage.chilled, fridgeCategories),
+      fridgeSections: compatibleFridgeStorage.chilled,
+      fridgeStorage: compatibleFridgeStorage,
+      fridgeItems,
+      fridgeCategories,
       ideas: saved.ideas || "",
       shopping: shoppingReminderText(shoppingItems),
       shoppingItems,
@@ -464,6 +484,8 @@ function loadMealPlanner() {
       fridge: "",
       fridgeSections: normalizeFridgeSections(),
       fridgeStorage: normalizeFridgeStorage(),
+      fridgeItems: normalizeFridgeItems(),
+      fridgeCategories: [...FRIDGE_CATEGORIES],
       ideas: "",
       shopping: "",
       shoppingItems: [],
@@ -489,11 +511,15 @@ function saveMealPlanner() {
     if (!value) continue;
     meals[mealKey(input.dataset.day, input.dataset.meal)] = value;
   }
+  const fridgeCategories = normalizeFridgeCategories(state.mealPlanner.fridgeCategories, state.mealPlanner.fridgeItems);
+  const fridgeStorage = fridgeItemsToStorage(state.mealPlanner.fridgeItems, fridgeCategories);
   state.mealPlanner = {
     meals,
-    fridge: fridgeSectionText(state.mealPlanner.fridgeStorage.chilled),
-    fridgeSections: state.mealPlanner.fridgeStorage.chilled,
-    fridgeStorage: state.mealPlanner.fridgeStorage,
+    fridge: fridgeSectionText(fridgeStorage.chilled, fridgeCategories),
+    fridgeSections: fridgeStorage.chilled,
+    fridgeStorage,
+    fridgeItems: state.mealPlanner.fridgeItems,
+    fridgeCategories,
     ideas: els.mealIdeasNote?.value || "",
     shopping: shoppingReminderText(state.mealPlanner.shoppingItems),
     shoppingItems: state.mealPlanner.shoppingItems,
@@ -524,9 +550,14 @@ function clearShoppingNote() {
 }
 
 function normalizeFridgeSections(sections, legacyText = "") {
-  const normalized = Object.fromEntries(FRIDGE_CATEGORIES.map((category) => [category, ""]));
+  const sourceCategories = sections && typeof sections === "object" && !Array.isArray(sections)
+    ? Object.keys(sections)
+    : [];
+  const normalized = Object.fromEntries(
+    [...new Set([...FRIDGE_CATEGORIES, ...sourceCategories])].map((category) => [category, ""])
+  );
   if (sections && typeof sections === "object" && !Array.isArray(sections)) {
-    for (const category of FRIDGE_CATEGORIES) normalized[category] = String(sections[category] || "");
+    for (const category of Object.keys(sections)) normalized[category] = String(sections[category] || "");
   } else if (legacyText) {
     normalized["其他"] = String(legacyText);
   }
@@ -543,22 +574,74 @@ function normalizeFridgeStorage(storage, legacySections, legacyText = "") {
   };
 }
 
-function fridgeSectionText(sections = {}) {
-  return FRIDGE_CATEGORIES
+function normalizeFridgeItems(items, legacyStorage = normalizeFridgeStorage()) {
+  const normalized = { chilled: [], frozen: [] };
+  for (const storageType of FRIDGE_STORAGE_TYPES) {
+    const storedItems = items?.[storageType.id];
+    if (Array.isArray(storedItems)) {
+      normalized[storageType.id] = storedItems
+        .map((item) => (typeof item === "string" ? { text: item } : item))
+        .map((item) => ({
+          id: item.id || createId(),
+          text: String(item.text || "").trim(),
+          category: String(item.category || "其他").trim() || "其他",
+          priority: Boolean(item.priority),
+          createdAt: item.createdAt || new Date().toISOString()
+        }))
+        .filter((item) => item.text);
+      continue;
+    }
+    const sections = legacyStorage?.[storageType.id] || {};
+    for (const category of Object.keys(sections)) {
+      for (const text of String(sections[category] || "").split(/\r?\n/).map((value) => value.trim()).filter(Boolean)) {
+        normalized[storageType.id].push({
+          id: createId(),
+          text,
+          category,
+          priority: false,
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
+  }
+  return normalized;
+}
+
+function normalizeFridgeCategories(categories, items = {}) {
+  return [...new Set([
+    ...FRIDGE_CATEGORIES,
+    ...(Array.isArray(categories) ? categories : []),
+    ...FRIDGE_STORAGE_TYPES.flatMap((storageType) => (items?.[storageType.id] || []).map((item) => item.category))
+  ].map((category) => String(category || "").trim()).filter(Boolean))];
+}
+
+function fridgeItemsToStorage(items = {}, categories = FRIDGE_CATEGORIES) {
+  const normalizedCategories = normalizeFridgeCategories(categories, items);
+  const storage = {};
+  for (const storageType of FRIDGE_STORAGE_TYPES) {
+    const sections = Object.fromEntries(normalizedCategories.map((category) => [category, ""]));
+    for (const item of items?.[storageType.id] || []) {
+      if (!item.text) continue;
+      if (!(item.category in sections)) sections[item.category] = "";
+      sections[item.category] = [sections[item.category], item.text].filter(Boolean).join("\n");
+    }
+    storage[storageType.id] = sections;
+  }
+  return storage;
+}
+
+function fridgeSectionText(sections = {}, categories = FRIDGE_CATEGORIES) {
+  return normalizeFridgeCategories(categories)
     .filter((category) => String(sections[category] || "").trim())
     .map((category) => `${category}：\n${String(sections[category]).trim()}`)
     .join("\n\n");
-}
-
-function saveFridgeNote() {
-  state.mealPlanner.fridgeStorage[state.activeFridgeStorage][state.activeFridgeCategory] = els.fridgeNote?.value || "";
-  saveMealPlanner();
 }
 
 function switchFridgeStorage(event) {
   const button = event.target.closest("button[data-fridge-storage]");
   if (!button) return;
   state.activeFridgeStorage = button.dataset.fridgeStorage;
+  state.editingFridgeItemId = "";
   renderFridgeControls();
 }
 
@@ -566,15 +649,23 @@ function switchFridgeCategory(event) {
   const button = event.target.closest("button[data-fridge-category]");
   if (!button) return;
   state.activeFridgeCategory = button.dataset.fridgeCategory;
+  if (els.fridgeCategoryInput && state.activeFridgeCategory !== ALL_FRIDGE_CATEGORIES) {
+    els.fridgeCategoryInput.value = state.activeFridgeCategory;
+  }
+  state.editingFridgeItemId = "";
   renderFridgeControls();
 }
 
 function renderFridgeControls() {
-  if (!els.fridgeStorageTabs || !els.fridgeCategoryTabs || !els.fridgeNote) return;
+  if (!els.fridgeStorageTabs || !els.fridgeCategoryTabs || !els.fridgeItemList) return;
   if (!FRIDGE_STORAGE_TYPES.some((type) => type.id === state.activeFridgeStorage)) {
     state.activeFridgeStorage = FRIDGE_STORAGE_TYPES[0].id;
   }
-  if (!FRIDGE_CATEGORIES.includes(state.activeFridgeCategory)) state.activeFridgeCategory = FRIDGE_CATEGORIES[0];
+  const categories = normalizeFridgeCategories(state.mealPlanner.fridgeCategories, state.mealPlanner.fridgeItems);
+  state.mealPlanner.fridgeCategories = categories;
+  if (state.activeFridgeCategory !== ALL_FRIDGE_CATEGORIES && !categories.includes(state.activeFridgeCategory)) {
+    state.activeFridgeCategory = ALL_FRIDGE_CATEGORIES;
+  }
 
   els.fridgeStorageTabs.replaceChildren();
   for (const storageType of FRIDGE_STORAGE_TYPES) {
@@ -585,12 +676,12 @@ function renderFridgeControls() {
     button.classList.toggle("is-active", isActive);
     button.setAttribute("role", "tab");
     button.setAttribute("aria-selected", String(isActive));
-    button.textContent = storageType.label;
+    button.textContent = `${storageType.label} ${state.mealPlanner.fridgeItems[storageType.id]?.length || 0}`;
     els.fridgeStorageTabs.append(button);
   }
 
   els.fridgeCategoryTabs.replaceChildren();
-  for (const category of FRIDGE_CATEGORIES) {
+  for (const category of [ALL_FRIDGE_CATEGORIES, ...categories]) {
     const button = document.createElement("button");
     const isActive = category === state.activeFridgeCategory;
     button.type = "button";
@@ -598,13 +689,246 @@ function renderFridgeControls() {
     button.classList.toggle("is-active", isActive);
     button.setAttribute("role", "tab");
     button.setAttribute("aria-selected", String(isActive));
-    button.textContent = category;
+    const count = category === ALL_FRIDGE_CATEGORIES
+      ? state.mealPlanner.fridgeItems[state.activeFridgeStorage].length
+      : state.mealPlanner.fridgeItems[state.activeFridgeStorage].filter((item) => item.category === category).length;
+    button.textContent = `${category === ALL_FRIDGE_CATEGORIES ? "全部" : category} ${count}`;
     els.fridgeCategoryTabs.append(button);
   }
-  const sections = state.mealPlanner.fridgeStorage[state.activeFridgeStorage];
-  const storageLabel = FRIDGE_STORAGE_TYPES.find((type) => type.id === state.activeFridgeStorage)?.label || "冷藏";
-  els.fridgeNote.value = sections[state.activeFridgeCategory] || "";
-  els.fridgeNote.setAttribute("aria-label", `${storageLabel}快用：${state.activeFridgeCategory}`);
+
+  renderFridgeCategoryOptions();
+  if (els.fridgeCategoryInput && !els.fridgeCategoryInput.value.trim()) {
+    els.fridgeCategoryInput.value = state.activeFridgeCategory === ALL_FRIDGE_CATEGORIES ? categories[0] : state.activeFridgeCategory;
+  }
+  if (els.fridgeSearchInput && els.fridgeSearchInput.value !== state.fridgeQuery) {
+    els.fridgeSearchInput.value = state.fridgeQuery;
+  }
+  renderFridgeItems();
+}
+
+function renderFridgeCategoryOptions() {
+  if (!els.fridgeCategoryOptions) return;
+  els.fridgeCategoryOptions.replaceChildren();
+  for (const category of state.mealPlanner.fridgeCategories) {
+    const option = document.createElement("option");
+    option.value = category;
+    els.fridgeCategoryOptions.append(option);
+  }
+}
+
+function handleFridgeSearch() {
+  state.fridgeQuery = els.fridgeSearchInput?.value.trim() || "";
+  state.editingFridgeItemId = "";
+  renderFridgeItems();
+}
+
+function addFridgeItem() {
+  const text = els.fridgeItemInput?.value.trim() || "";
+  if (!text) return;
+  const fallbackCategory = state.activeFridgeCategory === ALL_FRIDGE_CATEGORIES ? "其他" : state.activeFridgeCategory;
+  const category = els.fridgeCategoryInput?.value.trim() || fallbackCategory;
+  const items = state.mealPlanner.fridgeItems[state.activeFridgeStorage];
+  const duplicate = items.some((item) => item.text === text && item.category === category);
+  if (duplicate) {
+    showToast(`${text} 已经在这里`);
+    return;
+  }
+  state.mealPlanner.fridgeCategories = normalizeFridgeCategories(
+    [...state.mealPlanner.fridgeCategories, category],
+    state.mealPlanner.fridgeItems
+  );
+  items.push({ id: createId(), text, category, priority: false, createdAt: new Date().toISOString() });
+  els.fridgeItemInput.value = "";
+  saveMealPlanner();
+  renderFridgeControls();
+  els.fridgeItemInput.focus();
+  showToast(`已添加到${FRIDGE_STORAGE_TYPES.find((type) => type.id === state.activeFridgeStorage)?.label || "冷藏"}`);
+}
+
+function handleFridgeItemInput(event) {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  addFridgeItem();
+}
+
+function sortedFridgeItems(items) {
+  return [...items].sort((a, b) => Number(b.priority) - Number(a.priority)
+    || a.text.localeCompare(b.text, "zh-CN", { numeric: true, sensitivity: "base" }));
+}
+
+function renderFridgeItems() {
+  els.fridgeItemList.replaceChildren();
+  const query = state.fridgeQuery.toLocaleLowerCase();
+  const source = state.mealPlanner.fridgeItems[state.activeFridgeStorage] || [];
+  const filtered = source.filter((item) => {
+    if (state.activeFridgeCategory !== ALL_FRIDGE_CATEGORIES && item.category !== state.activeFridgeCategory) return false;
+    return !query || `${item.text} ${item.category}`.toLocaleLowerCase().includes(query);
+  });
+  const categories = state.activeFridgeCategory === ALL_FRIDGE_CATEGORIES
+    ? state.mealPlanner.fridgeCategories
+    : [state.activeFridgeCategory];
+
+  for (const category of categories) {
+    const items = sortedFridgeItems(filtered.filter((item) => item.category === category));
+    if (!items.length) continue;
+    const group = document.createElement("section");
+    group.className = "fridge-item-group";
+    const heading = document.createElement("h3");
+    heading.textContent = `${category} · ${items.length}`;
+    group.append(heading);
+    for (const item of items) group.append(createFridgeItemRow(item));
+    els.fridgeItemList.append(group);
+  }
+  els.fridgeItemEmpty?.classList.toggle("is-hidden", filtered.length > 0);
+  if (els.fridgeItemEmpty) els.fridgeItemEmpty.textContent = query ? "没有找到符合的东西" : "这里还没有东西";
+}
+
+function createFridgeItemRow(item) {
+  const row = document.createElement("div");
+  row.className = "fridge-item-row";
+  row.dataset.fridgeItemId = item.id;
+  row.classList.toggle("is-priority", item.priority);
+
+  const priorityButton = document.createElement("button");
+  priorityButton.type = "button";
+  priorityButton.className = "fridge-priority-button";
+  priorityButton.dataset.fridgeAction = "priority";
+  priorityButton.setAttribute("aria-label", `${item.priority ? "取消先吃" : "标记先吃"} ${item.text}`);
+  priorityButton.title = item.priority ? "取消先吃" : "先吃";
+  priorityButton.textContent = item.priority ? "★" : "☆";
+
+  const nameButton = document.createElement("button");
+  nameButton.type = "button";
+  nameButton.className = "fridge-item-name";
+  nameButton.dataset.fridgeAction = "edit";
+  nameButton.textContent = item.text;
+
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.className = "icon-button small";
+  removeButton.dataset.fridgeAction = "remove";
+  removeButton.setAttribute("aria-label", `移除 ${item.text}`);
+  removeButton.textContent = "×";
+  row.append(priorityButton, nameButton, removeButton);
+
+  if (state.editingFridgeItemId === item.id) row.append(createFridgeItemEditor(item));
+  return row;
+}
+
+function createFridgeItemEditor(item) {
+  const editor = document.createElement("div");
+  editor.className = "fridge-item-editor";
+
+  const nameInput = document.createElement("input");
+  nameInput.value = item.text;
+  nameInput.dataset.fridgeEditorName = "";
+  nameInput.setAttribute("aria-label", "物品名称");
+
+  const categoryInput = document.createElement("input");
+  categoryInput.value = item.category;
+  categoryInput.setAttribute("list", "fridgeCategoryOptions");
+  categoryInput.dataset.fridgeEditorCategory = "";
+  categoryInput.setAttribute("aria-label", "物品分类");
+
+  const storageSelect = document.createElement("select");
+  storageSelect.dataset.fridgeEditorStorage = "";
+  storageSelect.setAttribute("aria-label", "冷藏或冷冻");
+  for (const storageType of FRIDGE_STORAGE_TYPES) {
+    storageSelect.append(new Option(storageType.label, storageType.id, false, storageType.id === state.activeFridgeStorage));
+  }
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.className = "ghost-button compact";
+  cancelButton.dataset.fridgeAction = "cancel";
+  cancelButton.textContent = "取消";
+
+  const saveButton = document.createElement("button");
+  saveButton.type = "button";
+  saveButton.className = "primary-button compact";
+  saveButton.dataset.fridgeAction = "save";
+  saveButton.textContent = "保存";
+  editor.append(nameInput, categoryInput, storageSelect, cancelButton, saveButton);
+  return editor;
+}
+
+function handleFridgeItemAction(event) {
+  const button = event.target.closest("button[data-fridge-action]");
+  const row = event.target.closest("[data-fridge-item-id]");
+  if (!button || !row) return;
+  const itemId = row.dataset.fridgeItemId;
+  const item = state.mealPlanner.fridgeItems[state.activeFridgeStorage].find((entry) => entry.id === itemId);
+  if (!item) return;
+
+  if (button.dataset.fridgeAction === "priority") {
+    item.priority = !item.priority;
+    saveMealPlanner();
+    renderFridgeControls();
+    return;
+  }
+  if (button.dataset.fridgeAction === "edit") {
+    state.editingFridgeItemId = itemId;
+    renderFridgeItems();
+    window.setTimeout(() => els.fridgeItemList.querySelector(`[data-fridge-item-id="${itemId}"] [data-fridge-editor-name]`)?.focus(), 0);
+    return;
+  }
+  if (button.dataset.fridgeAction === "cancel") {
+    state.editingFridgeItemId = "";
+    renderFridgeItems();
+    return;
+  }
+  if (button.dataset.fridgeAction === "save") {
+    saveFridgeItemEditor(row, item);
+    return;
+  }
+  if (button.dataset.fridgeAction === "remove") {
+    if (!window.confirm(`从${state.activeFridgeStorage === "frozen" ? "冷冻" : "冷藏"}移除“${item.text}”？`)) return;
+    state.mealPlanner.fridgeItems[state.activeFridgeStorage] = state.mealPlanner.fridgeItems[state.activeFridgeStorage]
+      .filter((entry) => entry.id !== itemId);
+    state.editingFridgeItemId = "";
+    saveMealPlanner();
+    renderFridgeControls();
+    showToast(`已移除 ${item.text}`);
+  }
+}
+
+function saveFridgeItemEditor(row, item) {
+  const text = row.querySelector("[data-fridge-editor-name]")?.value.trim() || "";
+  const category = row.querySelector("[data-fridge-editor-category]")?.value.trim() || item.category;
+  const storageId = row.querySelector("[data-fridge-editor-storage]")?.value || state.activeFridgeStorage;
+  if (!text || !FRIDGE_STORAGE_TYPES.some((type) => type.id === storageId)) return;
+
+  item.text = text;
+  item.category = category;
+  state.mealPlanner.fridgeCategories = normalizeFridgeCategories(
+    [...state.mealPlanner.fridgeCategories, category],
+    state.mealPlanner.fridgeItems
+  );
+  if (storageId !== state.activeFridgeStorage) {
+    state.mealPlanner.fridgeItems[state.activeFridgeStorage] = state.mealPlanner.fridgeItems[state.activeFridgeStorage]
+      .filter((entry) => entry.id !== item.id);
+    state.mealPlanner.fridgeItems[storageId].push(item);
+  }
+  state.editingFridgeItemId = "";
+  saveMealPlanner();
+  renderFridgeControls();
+  showToast("已更新");
+}
+
+function handleFridgeEditorKeydown(event) {
+  const row = event.target.closest("[data-fridge-item-id]");
+  if (!row) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    state.editingFridgeItemId = "";
+    renderFridgeItems();
+    return;
+  }
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  const item = state.mealPlanner.fridgeItems[state.activeFridgeStorage]
+    .find((entry) => entry.id === row.dataset.fridgeItemId);
+  if (item) saveFridgeItemEditor(row, item);
 }
 
 function normalizeShoppingReminders(items, legacyText = "") {
@@ -710,13 +1034,17 @@ function moveShoppingReminderToFridge(itemId, targetValue) {
   const item = state.mealPlanner.shoppingItems.find((entry) => entry.id === itemId);
   const [storageId, fridgeCategory] = String(targetValue || "").split("::");
   const storageType = FRIDGE_STORAGE_TYPES.find((type) => type.id === storageId);
-  if (!item || !storageType || !FRIDGE_CATEGORIES.includes(fridgeCategory)) return;
-  const sections = state.mealPlanner.fridgeStorage[storageId];
-  const currentText = sections[fridgeCategory] || "";
-  const currentItems = currentText.split(/\r?\n/).map((text) => text.trim()).filter(Boolean);
-  const isDuplicate = currentItems.includes(item.text);
+  if (!item || !storageType || !state.mealPlanner.fridgeCategories.includes(fridgeCategory)) return;
+  const currentItems = state.mealPlanner.fridgeItems[storageId];
+  const isDuplicate = currentItems.some((entry) => entry.text === item.text && entry.category === fridgeCategory);
   if (!isDuplicate) {
-    sections[fridgeCategory] = [currentText.trimEnd(), item.text].filter(Boolean).join("\n");
+    currentItems.push({
+      id: createId(),
+      text: item.text,
+      category: fridgeCategory,
+      priority: false,
+      createdAt: new Date().toISOString()
+    });
   }
   state.mealPlanner.shoppingItems = state.mealPlanner.shoppingItems.filter((entry) => entry.id !== itemId);
   saveMealPlanner();
@@ -785,7 +1113,7 @@ function renderShoppingReminders() {
       for (const storageType of FRIDGE_STORAGE_TYPES) {
         const group = document.createElement("optgroup");
         group.label = storageType.label;
-        for (const fridgeCategory of FRIDGE_CATEGORIES) {
+        for (const fridgeCategory of state.mealPlanner.fridgeCategories) {
           group.append(new Option(fridgeCategory, `${storageType.id}::${fridgeCategory}`));
         }
         fridgeSelect.append(group);
@@ -2917,7 +3245,7 @@ function buildBackupPayload() {
 
 function buildSyncPayload(target = "all") {
   const base = {
-    version: 2,
+    version: 3,
     syncTarget: target,
     exportedAt: new Date().toISOString()
   };
@@ -2984,11 +3312,16 @@ async function applyBackupPayload(payload, options = {}) {
       payload.mealPlanner.fridgeSections,
       payload.mealPlanner.fridge
     );
+    const fridgeItems = normalizeFridgeItems(payload.mealPlanner.fridgeItems, fridgeStorage);
+    const fridgeCategories = normalizeFridgeCategories(payload.mealPlanner.fridgeCategories, fridgeItems);
+    const compatibleFridgeStorage = fridgeItemsToStorage(fridgeItems, fridgeCategories);
     state.mealPlanner = {
       meals: payload.mealPlanner.meals || {},
-      fridge: fridgeSectionText(fridgeStorage.chilled),
-      fridgeSections: fridgeStorage.chilled,
-      fridgeStorage,
+      fridge: fridgeSectionText(compatibleFridgeStorage.chilled, fridgeCategories),
+      fridgeSections: compatibleFridgeStorage.chilled,
+      fridgeStorage: compatibleFridgeStorage,
+      fridgeItems,
+      fridgeCategories,
       ideas: payload.mealPlanner.ideas || "",
       shopping: shoppingReminderText(shoppingItems),
       shoppingItems,

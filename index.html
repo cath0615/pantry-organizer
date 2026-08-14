@@ -134,8 +134,19 @@
               <section class="planner-note fridge-reminders" aria-labelledby="fridgeRemindersTitle">
                 <span id="fridgeRemindersTitle">冷藏 / 冷冻快用</span>
                 <div class="fridge-storage-tabs" id="fridgeStorageTabs" role="tablist" aria-label="选择冷藏或冷冻"></div>
+                <div class="fridge-search-row">
+                  <span aria-hidden="true">⌕</span>
+                  <input id="fridgeSearchInput" type="search" autocomplete="off" placeholder="搜索当前冷藏或冷冻" />
+                </div>
                 <div class="fridge-category-tabs" id="fridgeCategoryTabs" role="tablist" aria-label="快用分类"></div>
-                <textarea id="fridgeNote" rows="6" placeholder="记下近期要用完的东西"></textarea>
+                <div class="fridge-add-row">
+                  <input id="fridgeCategoryInput" list="fridgeCategoryOptions" autocomplete="off" placeholder="分类" />
+                  <datalist id="fridgeCategoryOptions"></datalist>
+                  <input id="fridgeItemInput" autocomplete="off" placeholder="添加一样东西" />
+                  <button class="icon-button" id="addFridgeItemButton" type="button" aria-label="添加冷藏或冷冻项目">+</button>
+                </div>
+                <div class="fridge-item-list" id="fridgeItemList"></div>
+                <p class="fridge-item-empty" id="fridgeItemEmpty">这里还没有东西</p>
               </section>
               <label class="planner-note">
                 想吃什么
@@ -425,6 +436,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=71" type="module"></script>
+    <script src="./app.js?v=72" type="module"></script>
   </body>
 </html>
