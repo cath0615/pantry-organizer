@@ -35,7 +35,7 @@ const FRIDGE_STORAGE_TYPES = [
   { id: "chilled", label: "冷藏" },
   { id: "frozen", label: "冷冻" }
 ];
-const FRIDGE_CATEGORIES = ["蔬菜", "水果", "奶制品", "蛋/豆制品", "肉/海鲜", "其他"];
+const FRIDGE_CATEGORIES = ["蔬菜", "水果", "主食", "奶制品", "蛋/豆制品", "肉/海鲜", "其他"];
 const ALL_FRIDGE_CATEGORIES = "all";
 const DEFAULT_SHOPPING_CATEGORY = "未分类";
 const MEAL_SLOTS = [
