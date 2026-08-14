@@ -510,7 +510,8 @@ select:focus {
   gap: 7px;
 }
 
-.fridge-add-row input {
+.fridge-add-row input,
+.fridge-add-row select {
   min-width: 0;
 }
 

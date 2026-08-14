@@ -140,8 +140,7 @@
                 </div>
                 <div class="fridge-category-tabs" id="fridgeCategoryTabs" role="tablist" aria-label="快用分类"></div>
                 <div class="fridge-add-row">
-                  <input id="fridgeCategoryInput" list="fridgeCategoryOptions" autocomplete="off" placeholder="分类" />
-                  <datalist id="fridgeCategoryOptions"></datalist>
+                  <select id="fridgeCategoryInput" aria-label="添加物品的分类"></select>
                   <input id="fridgeItemInput" autocomplete="off" placeholder="添加一样东西" />
                   <button class="icon-button" id="addFridgeItemButton" type="button" aria-label="添加冷藏或冷冻项目">+</button>
                 </div>
@@ -436,6 +435,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=73" type="module"></script>
+    <script src="./app.js?v=74" type="module"></script>
   </body>
 </html>

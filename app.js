@@ -37,6 +37,7 @@ const FRIDGE_STORAGE_TYPES = [
 ];
 const FRIDGE_CATEGORIES = ["蔬菜", "水果", "主食", "奶制品", "蛋/豆制品", "肉/海鲜", "其他"];
 const ALL_FRIDGE_CATEGORIES = "all";
+const CUSTOM_FRIDGE_CATEGORY_VALUE = "__custom_fridge_category__";
 const DEFAULT_SHOPPING_CATEGORY = "未分类";
 const MEAL_SLOTS = [
   { id: "breakfast", label: "早饭" },
@@ -133,7 +134,6 @@ const els = {
   fridgeCategoryTabs: $("fridgeCategoryTabs"),
   fridgeSearchInput: $("fridgeSearchInput"),
   fridgeCategoryInput: $("fridgeCategoryInput"),
-  fridgeCategoryOptions: $("fridgeCategoryOptions"),
   fridgeItemInput: $("fridgeItemInput"),
   addFridgeItemButton: $("addFridgeItemButton"),
   fridgeItemList: $("fridgeItemList"),
@@ -300,9 +300,11 @@ function bindEvents() {
   on(els.fridgeStorageTabs, "click", switchFridgeStorage);
   on(els.fridgeCategoryTabs, "click", switchFridgeCategory);
   on(els.fridgeSearchInput, "input", handleFridgeSearch);
+  on(els.fridgeCategoryInput, "change", handleFridgeCategorySelection);
   on(els.addFridgeItemButton, "click", addFridgeItem);
   on(els.fridgeItemInput, "keydown", handleFridgeItemInput);
   on(els.fridgeItemList, "click", handleFridgeItemAction);
+  on(els.fridgeItemList, "change", handleFridgeEditorCategoryChange);
   on(els.fridgeItemList, "keydown", handleFridgeEditorKeydown);
   on(els.mealIdeasNote, "input", saveMealPlanner);
   on(els.addShoppingItemButton, "click", addShoppingReminder);
@@ -697,9 +699,6 @@ function renderFridgeControls() {
   }
 
   renderFridgeCategoryOptions();
-  if (els.fridgeCategoryInput && !els.fridgeCategoryInput.value.trim()) {
-    els.fridgeCategoryInput.value = state.activeFridgeCategory === ALL_FRIDGE_CATEGORIES ? categories[0] : state.activeFridgeCategory;
-  }
   if (els.fridgeSearchInput && els.fridgeSearchInput.value !== state.fridgeQuery) {
     els.fridgeSearchInput.value = state.fridgeQuery;
   }
@@ -707,13 +706,54 @@ function renderFridgeControls() {
 }
 
 function renderFridgeCategoryOptions() {
-  if (!els.fridgeCategoryOptions) return;
-  els.fridgeCategoryOptions.replaceChildren();
+  if (!els.fridgeCategoryInput) return;
+  const currentCategory = els.fridgeCategoryInput.value;
+  const fallbackCategory = state.activeFridgeCategory === ALL_FRIDGE_CATEGORIES
+    ? state.mealPlanner.fridgeCategories[0]
+    : state.activeFridgeCategory;
+  populateFridgeCategorySelect(
+    els.fridgeCategoryInput,
+    state.mealPlanner.fridgeCategories.includes(currentCategory) ? currentCategory : fallbackCategory
+  );
+}
+
+function populateFridgeCategorySelect(select, selectedCategory) {
+  select.replaceChildren();
   for (const category of state.mealPlanner.fridgeCategories) {
-    const option = document.createElement("option");
-    option.value = category;
-    els.fridgeCategoryOptions.append(option);
+    select.append(new Option(category, category, false, category === selectedCategory));
   }
+  select.append(new Option("＋ 新建分类…", CUSTOM_FRIDGE_CATEGORY_VALUE));
+  select.value = state.mealPlanner.fridgeCategories.includes(selectedCategory)
+    ? selectedCategory
+    : state.mealPlanner.fridgeCategories[0];
+  select.dataset.previousCategory = select.value;
+}
+
+function requestNewFridgeCategory(select) {
+  const category = window.prompt("新分类名称：")?.trim() || "";
+  if (!category) {
+    select.value = select.dataset.previousCategory || state.mealPlanner.fridgeCategories[0];
+    return "";
+  }
+  state.mealPlanner.fridgeCategories = normalizeFridgeCategories(
+    [...state.mealPlanner.fridgeCategories, category],
+    state.mealPlanner.fridgeItems
+  );
+  populateFridgeCategorySelect(select, category);
+  return category;
+}
+
+function handleFridgeCategorySelection() {
+  if (els.fridgeCategoryInput.value !== CUSTOM_FRIDGE_CATEGORY_VALUE) {
+    els.fridgeCategoryInput.dataset.previousCategory = els.fridgeCategoryInput.value;
+    return;
+  }
+  const category = requestNewFridgeCategory(els.fridgeCategoryInput);
+  if (!category) return;
+  saveMealPlanner();
+  renderFridgeControls();
+  els.fridgeCategoryInput.value = category;
+  showToast(`已添加分类 ${category}`);
 }
 
 function handleFridgeSearch() {
@@ -824,11 +864,10 @@ function createFridgeItemEditor(item) {
   nameInput.dataset.fridgeEditorName = "";
   nameInput.setAttribute("aria-label", "物品名称");
 
-  const categoryInput = document.createElement("input");
-  categoryInput.value = item.category;
-  categoryInput.setAttribute("list", "fridgeCategoryOptions");
+  const categoryInput = document.createElement("select");
   categoryInput.dataset.fridgeEditorCategory = "";
   categoryInput.setAttribute("aria-label", "物品分类");
+  populateFridgeCategorySelect(categoryInput, item.category);
 
   const storageSelect = document.createElement("select");
   storageSelect.dataset.fridgeEditorStorage = "";
@@ -890,6 +929,20 @@ function handleFridgeItemAction(event) {
     renderFridgeControls();
     showToast(`已移除 ${item.text}`);
   }
+}
+
+function handleFridgeEditorCategoryChange(event) {
+  const select = event.target.closest("select[data-fridge-editor-category]");
+  if (!select) return;
+  if (select.value !== CUSTOM_FRIDGE_CATEGORY_VALUE) {
+    select.dataset.previousCategory = select.value;
+    return;
+  }
+  const category = requestNewFridgeCategory(select);
+  if (!category) return;
+  saveMealPlanner();
+  renderFridgeCategoryOptions();
+  showToast(`已添加分类 ${category}`);
 }
 
 function saveFridgeItemEditor(row, item) {
