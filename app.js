@@ -25,6 +25,7 @@ const SYNC_TARGETS = {
   meal: { label: "Meal Plan", file: "meal-plan.json" },
   recipes: { label: "Recipes", file: "recipes-data.json" }
 };
+const INDIVIDUAL_SYNC_TARGETS = ["pantry", "meal", "recipes"];
 const CUSTOM_CATEGORY_VALUE = "__custom_category__";
 const BACKUP_CHUNK_SIZE = 180000;
 const CHUNK_PREFIX = "PANTRY_BACKUP_PART";
@@ -3056,28 +3057,26 @@ function saveSyncSettingsFromForm() {
 }
 
 async function uploadGithubSync(target = "all") {
-  const settings = syncSettingsForTarget(readSyncSettings(), target);
+  const settings = readSyncSettings();
   if (!validateSyncSettings(settings)) return;
-  saveSyncSettings(readSyncSettings());
+  saveSyncSettings(settings);
   setSyncButtonsDisabled(true);
   const label = syncTargetLabel(target);
   updateSyncStatus(`正在上传${label}...`);
   try {
-    const existing = await fetchGithubContent(settings, { allowMissing: true });
-    const content = JSON.stringify(buildSyncPayload(target));
-    const body = {
-      message: `Update ${target} sync ${new Date().toISOString()}`,
-      content: encodeBase64Utf8(content),
-      branch: settings.branch
-    };
-    if (existing?.sha) body.sha = existing.sha;
-    const response = await fetch(githubContentUrl(settings), {
-      method: "PUT",
-      headers: githubHeaders(settings),
-      body: JSON.stringify(body)
-    });
-    if (!response.ok) throw new Error(await githubErrorMessage(response));
-    updateSyncStatus(`已上传${label}到 ${settings.path}`);
+    const targets = target === "all" ? INDIVIDUAL_SYNC_TARGETS : [target];
+    const uploaded = [];
+    for (const currentTarget of targets) {
+      const currentLabel = syncTargetLabel(currentTarget);
+      updateSyncStatus(`正在上传${currentLabel}${target === "all" ? `（${uploaded.length + 1}/${targets.length}）` : ""}...`);
+      const content = JSON.stringify(buildSyncPayload(currentTarget));
+      const targetSettings = syncSettingsForTarget(settings, currentTarget);
+      await uploadGithubSyncFile(targetSettings, currentTarget, content);
+      uploaded.push(`${currentLabel} ${formatBytes(new Blob([content]).size)}`);
+    }
+    updateSyncStatus(target === "all"
+      ? `全部上传完成：${uploaded.join("，")}。未生成总文件。`
+      : `已上传${label}到 ${syncSettingsForTarget(settings, target).path}`);
     showToast(`已上传${label}`);
   } catch (error) {
     updateSyncStatus(error.message || "上传失败");
@@ -3088,17 +3087,36 @@ async function uploadGithubSync(target = "all") {
 }
 
 async function downloadGithubSync(target = "all") {
-  const settings = syncSettingsForTarget(readSyncSettings(), target);
+  const settings = readSyncSettings();
   if (!validateSyncSettings(settings)) return;
-  saveSyncSettings(readSyncSettings());
+  saveSyncSettings(settings);
   setSyncButtonsDisabled(true);
   const label = syncTargetLabel(target);
   updateSyncStatus(`正在同步${label}...`);
   try {
-    const remote = await fetchGithubContent(settings);
-    const payload = JSON.parse(decodeBase64Utf8(remote.content || ""));
-    const result = await applyBackupPayload(payload, { requireItems: false });
-    updateSyncStatus(`${label}同步完成：${formatSyncResult(result)}。`);
+    const targets = target === "all" ? INDIVIDUAL_SYNC_TARGETS : [target];
+    const downloads = [];
+    for (let index = 0; index < targets.length; index += 1) {
+      const currentTarget = targets[index];
+      const currentLabel = syncTargetLabel(currentTarget);
+      updateSyncStatus(`正在读取${currentLabel}${target === "all" ? `（${index + 1}/${targets.length}）` : ""}...`);
+      const remote = await fetchGithubContent(syncSettingsForTarget(settings, currentTarget), { allowMissing: target === "all" });
+      if (!remote) throw new Error(`缺少${currentLabel}同步文件，请先在有完整数据的设备点“上传全部”`);
+      downloads.push({ currentTarget, remote });
+    }
+    const totalResult = { items: 0, recipes: 0, plannedRecipes: 0, mealPlanner: false };
+    for (let index = 0; index < downloads.length; index += 1) {
+      const { currentTarget, remote } = downloads[index];
+      const currentLabel = syncTargetLabel(currentTarget);
+      updateSyncStatus(`正在同步${currentLabel}${target === "all" ? `（${index + 1}/${targets.length}）` : ""}...`);
+      const payload = JSON.parse(decodeBase64Utf8(remote.content || ""));
+      const result = await applyBackupPayload(payload, { requireItems: false });
+      totalResult.items += result.items;
+      totalResult.recipes += result.recipes;
+      totalResult.plannedRecipes += result.plannedRecipes;
+      totalResult.mealPlanner ||= result.mealPlanner;
+    }
+    updateSyncStatus(`${label}同步完成：${formatSyncResult(totalResult)}${target === "all" ? "（3 个独立文件）" : ""}。`);
     showToast(`${label}同步完成`);
   } catch (error) {
     updateSyncStatus(error.message || "同步失败");
@@ -3106,6 +3124,22 @@ async function downloadGithubSync(target = "all") {
   } finally {
     setSyncButtonsDisabled(false);
   }
+}
+
+async function uploadGithubSyncFile(settings, target, content) {
+  const existing = await fetchGithubContent(settings, { allowMissing: true });
+  const body = {
+    message: `Update ${target} sync ${new Date().toISOString()}`,
+    content: encodeBase64Utf8(content),
+    branch: settings.branch
+  };
+  if (existing?.sha) body.sha = existing.sha;
+  const response = await fetch(githubContentUrl(settings), {
+    method: "PUT",
+    headers: githubHeaders(settings),
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) throw new Error(await githubErrorMessage(response));
 }
 
 function saveSyncSettings(settings) {
@@ -3148,7 +3182,7 @@ function syncTargetLabel(target) {
 
 function updateCurrentSyncHint() {
   const label = syncTargetLabel(currentSyncTarget());
-  updateSyncStatus(`当前 tab 是 ${label}。可以只上传/同步当前，也可以上传/同步全部。`);
+  updateSyncStatus(`当前 tab 是 ${label}。全部操作会依次同步库存、Meal Plan 和 Recipes 三个独立文件。`);
 }
 
 async function fetchGithubContent(settings, options = {}) {
